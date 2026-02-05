@@ -8,33 +8,33 @@ Sandbox Executor 旨在为基于 WebAssembly 的沙盒提供高级的、以函�
 
 ### 核心组件
 
-1.  **`SandboxExecutor` (src/executor.ts)**: 主要入口点。它编排整个执行生命周期：
-    *   签名推断。
-    *   代码包装。
-    *   文件系统准备。
-    *   通过 `@runno/sandbox` 进行 WASM 执行。
-    *   执行后的变更检测和清理。
+1. **`SandboxExecutor` (src/executor.ts)**: 主要入口点。它编排整个执行生命周期：
+    * 签名推断。
+    * 代码包装。
+    * 文件系统准备。
+    * 通过 `@runno/sandbox` 进行 WASM 执行。
+    * 执行后的变更检测和清理。
 
-2.  **代码生成器 (src/generators/)**:
-    *   每种语言都有一个 `CodeGenerator`，负责将用户代码包装到执行上下文中。
-    *   包装代码负责调用目标函数，捕获结果/错误，并使用特定的标记 (`__SANDBOX_RESULT_START__`) 将其序列化到 `stdout`。
+2. **代码生成器 (src/generators/)**:
+    * 每种语言都有一个 `CodeGenerator`，负责将用户代码包装到执行上下文中。
+    * 包装代码负责调用目标函数，捕获结果/错误，并使用特定的标记 (`__SANDBOX_RESULT_START__`) 将其序列化到 `stdout`。
 
-3.  **签名推断 (src/inference/engine.ts)**:
-    *   使用静态分析（基于正则）和语言约定来确定函数参数。
-    *   这使得执行器能够正确地将 `args` 和 `kwargs` 映射到底层语言的函数调用语法。
+3. **签名推断 (src/inference/engine.ts)**:
+    * 使用静态分析（基于正则）和语言约定来确定函数参数。
+    * 这使得执行器能够正确地将 `args` 和 `kwargs` 映射到底层语言的函数调用语法。
 
-4.  **文件系统管理 (src/fs/)**:
-    *   **`FSBuilder`**: 构建初始的 `WASIFS` 对象。
-    *   **`FileSystemDiffer`**: 通过在执行前拍摄快照并与 WASM 运行时的结果进行对比来处理变更检测。这种基于快照的方法确保了与 WASM Worker 的兼容性（Proxy 对象无法被克隆）。
-    *   **`SyncManager`**: 将虚拟文件系统的变更同步回真实磁盘，并执行配置的权限。
-    *   **`PermissionResolver`**: 计算基于 glob 的规则以允许或拒绝文件操作。
+4. **文件系统管理 (src/fs/)**:
+    * **`FSBuilder`**: 构建初始的 `WASIFS` 对象。
+    * **`FileSystemDiffer`**: 通过在执行前拍摄快照并与 WASM 运行时的结果进行对比来处理变更检测。这种基于快照的方法确保了与 WASM Worker 的兼容性（Proxy 对象无法被克隆）。
+    * **`SyncManager`**: 将虚拟文件系统的变更同步回真实磁盘，并执行配置的权限。
+    * **`PermissionResolver`**: 计算基于 glob 的规则以允许或拒绝文件操作。
 
 ## 🚀 开发流程
 
 ### 前提条件
 
-*   Node.js >= 20.11.1
-*   pnpm
+* Node.js >= 20.11.1
+* pnpm
 
 ### 设置
 
@@ -69,30 +69,31 @@ npx vitest test/integration
 
 要添加新语言，你需要执行以下步骤：
 
-1.  **添加语言类型**: 更新 `src/types/request.ts` 中的 `SupportedLanguage`。
-2.  **实现生成器**: 创建 `src/generators/<language>.ts` 并继承 `CodeGenerator`。
-    *   实现 `generateWrapper`: 创建调用用户函数并在标记之间打印 JSON 输出的代码。
-    *   实现 `serialize`: 如何将 JS 类型转换为目标语言的字面量。
-3.  **注册生成器**: 将你的生成器添加到 `src/generators/index.ts` 中的映射中。
-    *   如果 Runno 的运行时名称与你的语言名称不同（例如 `php` -> `php-cgi`），请更新 `getRuntime`。
-    *   **C/C++ 注意事项**: 当前沙盒环境中的 `clang` 和 `clangpp` 存在一些限制：
-        *   **异常**: 异常已被禁用。不要在包装代码中使用 `try-catch` 块。
-        *   **标准**: 使用兼容 C++11 的代码。避免使用 C++14/17/20 的特性，如 `if constexpr` 或类型特征变量（如 `is_same_v`）。如果需要，请使用传统的模板特化和 `std::enable_if`。
-4.  **添加推断逻辑**: 更新 `src/inference/engine.ts`。
-    *   实现 `infer<Language>` 方法来解析函数签名。
-    *   使用新语言的默认行为更新 `getConvention`。
-5.  **添加测试**:
-    *   在 `test/unit/generators/` 中添加生成器的单元测试。
-    *   在 `test/unit/inference-engine.test.ts` 中添加推断测试。
-    *   在 `test/integration/real-environment.test.ts` 中添加集成测试。
+1. **添加语言类型**: 更新 `src/types/request.ts` 中的 `SupportedLanguage`。
+2. **实现生成器**: 创建 `src/generators/<language>.ts` 并继承 `CodeGenerator`。
+    * 实现 `generateWrapper`: 创建调用用户函数并在标记之间打印 JSON 输出的代码。
+    * 实现 `serialize`: 如何将 JS 类型转换为目标语言的字面量。
+3. **注册生成器**: 将你的生成器添加到 `src/generators/index.ts` 中的映射中。
+    * 如果 Runno 的运行时名称与你的语言名称不同（例如 `php` -> `php-cgi`），请更新 `getRuntime`。
+    * **C/C++ 注意事项**: 当前沙盒环境中的 `clang` 和 `clangpp` 存在一些限制：
+        * **异常**: 异常已被禁用。不要在包装代码中使用 `try-catch` 块。
+        * **标准**: 使用兼容 C++11 的代码。避免使用 C++14/17/20 的特性，如 `if constexpr` 或类型特征变量（如 `is_same_v`）。如果需要，请使用传统的模板特化和 `std::enable_if`。
+4. **添加推断逻辑**: 更新 `src/inference/engine.ts`。
+    * 实现 `infer<Language>` 方法来解析函数签名。
+    * 使用新语言的默认行为更新 `getConvention`。
+5. **添加测试**:
+    * 在 `test/unit/generators/` 中添加生成器的单元测试。
+    * 在 `test/unit/inference-engine.test.ts` 中添加推断测试。
+    * 在 `test/integration/real-environment.test.ts` 中添加集成测试。
 
 ## 📁 文件系统追踪详情
 
 之前，我们使用基于 `Proxy` 的方法 (`TrackedFileSystem`)。但是，由于 `@runno/sandbox` 在 Worker 中执行 WASM，文件系统对象必须通过结构化克隆算法进行克隆。由于 `Proxy` 对象无法被克隆，我们切换到了 `FileSystemDiffer`。
 
 `FileSystemDiffer` 的工作原理：
-1.  在执行前对 `WASIFS` 进行深拷贝。
-2.  将纯 `WASIFS` 对象传递给沙盒。
-3.  将沙盒返回的 `WASIFS` 与初始快照进行对比。
+
+1. 在执行前对 `WASIFS` 进行深拷贝。
+2. 将纯 `WASIFS` 对象传递给沙盒。
+3. 将沙盒返回的 `WASIFS` 与初始快照进行对比。
 
 这种方法对于跨线程通信更加健壮，并确保捕获所有变更（包括 WASI 运行时本身所做的变更）。
