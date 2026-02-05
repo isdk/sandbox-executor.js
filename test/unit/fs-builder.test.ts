@@ -1,8 +1,7 @@
 // tests/unit/fs-builder.test.ts
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { FSBuilder } from '@/fs/fs-builder';
-import type { WASIFS } from '@aspect/wasi';
+import { FSBuilder } from '../../src/fs/fs-builder';
 
 // Mock fs/promises 和 path
 vi.mock('fs/promises');
