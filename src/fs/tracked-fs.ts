@@ -150,15 +150,16 @@ export class TrackedFileSystem {
   /**
    * Performs a deep comparison between the current state and the initial snapshot.
    * This is used to detect changes that might have bypassed the Proxy traps.
+   * @param fs - Optional FS to compare against. If not provided, uses the tracked fs.
    */
-  diffWithOriginal(): void {
-    const currentPaths = new Set(Object.keys(this.fs));
+  diffWithOriginal(fs: WASIFS = this.fs): void {
+    const currentPaths = new Set(Object.keys(fs));
     const originalPaths = new Set(this.originalHashes.keys());
 
     // Detect new files
     for (const path of currentPaths) {
       if (!originalPaths.has(path) && !this.changes.has(path)) {
-        const file = this.fs[path];
+        const file = fs[path];
         this.changes.set(path, {
           type: 'create',
           path,
@@ -184,14 +185,14 @@ export class TrackedFileSystem {
     // Detect modified files
     for (const path of currentPaths) {
       if (originalPaths.has(path) && !this.changes.has(path)) {
-        const currentHash = this.hashFile(this.fs[path]);
+        const currentHash = this.hashFile(fs[path]);
         const originalHash = this.originalHashes.get(path);
         if (currentHash !== originalHash) {
           this.changes.set(path, {
             type: 'modify',
             path,
-            content: this.extractContent(this.fs[path]),
-            size: this.getFileSize(this.fs[path]),
+            content: this.extractContent(fs[path]),
+            size: this.getFileSize(fs[path]),
             timestamp: new Date(),
           });
         }

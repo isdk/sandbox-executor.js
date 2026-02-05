@@ -165,6 +165,43 @@ class MyClass:
     });
   });
 
+  describe('优先级 2: PHP 推断', () => {
+    it('应该推断简单函数参数', () => {
+      const code = 'function add($a, $b) { return $a + $b; }';
+      const result = engine.resolve(code, 'add', 'php');
+
+      expect(result.source).toBe('inferred');
+      expect(result.params).toHaveLength(2);
+      expect(result.params[0].name).toBe('a');
+      expect(result.params[1].name).toBe('b');
+    });
+
+    it('应该推断带默认值的参数', () => {
+      const code = 'function greet($name, $greeting = "Hello") {}';
+      const result = engine.resolve(code, 'greet', 'php');
+
+      expect(result.params).toHaveLength(2);
+      expect(result.params[0].required).toBe(true);
+      expect(result.params[1].required).toBe(false);
+    });
+
+    it('应该识别 variadic 参数 (...$args)', () => {
+      const code = 'function func(...$args) {}';
+      const result = engine.resolve(code, 'func', 'php');
+
+      expect(result.variadic).toBe(true);
+    });
+
+    it('应该处理类型提示', () => {
+      const code = 'function func(int $a, ?string $b = null) {}';
+      const result = engine.resolve(code, 'func', 'php');
+
+      expect(result.params).toHaveLength(2);
+      expect(result.params[0].name).toBe('a');
+      expect(result.params[1].name).toBe('b');
+    });
+  });
+
   describe('优先级 3: 语言约定', () => {
     it('Python 约定应该支持 variadic 和 kwargs', () => {
       // 使用无法解析的代码
@@ -184,6 +221,14 @@ class MyClass:
 
     it('Ruby 约定应该支持 variadic 和 kwargs', () => {
       const result = engine.resolve('invalid', 'unknown', 'ruby');
+
+      expect(result.source).toBe('convention');
+      expect(result.variadic).toBe(true);
+      expect(result.acceptsKwargs).toBe(true);
+    });
+
+    it('PHP 约定应该支持 variadic 和 kwargs', () => {
+      const result = engine.resolve('invalid', 'unknown', 'php');
 
       expect(result.source).toBe('convention');
       expect(result.variadic).toBe(true);

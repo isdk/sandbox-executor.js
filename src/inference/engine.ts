@@ -42,12 +42,14 @@ export class SignatureInferenceEngine {
     language: SupportedLanguage,
     schema?: FunctionSchema
   ): InferredSignature {
+    const canonicalLanguage = this.canonicalizeLanguage(language);
+
     // Priority 1: User-provided schema
     if (schema?.params) {
       return {
         params: schema.params,
         variadic: schema.variadic ?? false,
-        acceptsKwargs: schema.acceptsKwargs ?? this.languageAcceptsKwargs(language),
+        acceptsKwargs: schema.acceptsKwargs ?? this.languageAcceptsKwargs(canonicalLanguage),
         hasOptionsParam: false,
         source: 'schema',
       };
@@ -55,7 +57,7 @@ export class SignatureInferenceEngine {
 
     // Priority 2: Infer from code
     try {
-      const inferred = this.inferFromCode(code, functionName, language);
+      const inferred = this.inferFromCode(code, functionName, canonicalLanguage);
       if (inferred) {
         return { ...inferred, source: 'inferred' };
       }
@@ -64,18 +66,29 @@ export class SignatureInferenceEngine {
     }
 
     // Priority 3: Language convention
-    return this.getConvention(language);
+    return this.getConvention(canonicalLanguage);
+  }
+
+  private canonicalizeLanguage(language: SupportedLanguage): string {
+    switch (language) {
+      case 'js':
+      case 'javascript':
+        return 'quickjs';
+      default:
+        return language;
+    }
   }
 
   private inferFromCode(
     code: string,
     functionName: string,
-    language: SupportedLanguage
+    language: string
   ): Omit<InferredSignature, 'source'> | null {
     switch (language) {
       case 'python': return this.inferPython(code, functionName);
       case 'quickjs': return this.inferJavaScript(code, functionName);
       case 'ruby': return this.inferRuby(code, functionName);
+      case 'php': return this.inferPHP(code, functionName);
       default: return null;
     }
   }
@@ -104,6 +117,31 @@ export class SignatureInferenceEngine {
     }
 
     return { params, variadic, acceptsKwargs, hasOptionsParam: false };
+  }
+
+  private inferPHP(code: string, functionName: string) {
+    const match = code.match(new RegExp(`function\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
+    if (!match) return null;
+
+    const params: ParamSchema[] = [];
+    let variadic = false;
+
+    for (const part of this.splitParams(match[1])) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.startsWith('...')) {
+        variadic = true;
+      } else {
+        const [nameWithType, defaultVal] = trimmed.split('=').map(s => s.trim());
+        const parts = nameWithType.split(/\s+/);
+        const nameWithDollar = parts[parts.length - 1];
+        const name = nameWithDollar.startsWith('$') ? nameWithDollar.substring(1) : nameWithDollar;
+        params.push({ name, required: !defaultVal });
+      }
+    }
+
+    return { params, variadic, acceptsKwargs: true, hasOptionsParam: false };
   }
 
   private inferJavaScript(code: string, functionName: string) {
@@ -169,17 +207,18 @@ export class SignatureInferenceEngine {
     return { params, variadic, acceptsKwargs, hasOptionsParam: false };
   }
 
-  private getConvention(language: SupportedLanguage): InferredSignature {
-    const conventions: Record<SupportedLanguage, InferredSignature> = {
+  private getConvention(language: string): InferredSignature {
+    const conventions: Record<string, InferredSignature> = {
       python: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       ruby: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      php: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       quickjs: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: true, source: 'convention' },
     };
     return conventions[language];
   }
 
-  private languageAcceptsKwargs(language: SupportedLanguage): boolean {
-    return language === 'python' || language === 'ruby';
+  private languageAcceptsKwargs(language: string): boolean {
+    return language === 'python' || language === 'ruby' || language === 'php';
   }
 
   private splitParams(str: string): string[] {

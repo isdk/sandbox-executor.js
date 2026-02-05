@@ -8,11 +8,11 @@
 
 ## ✨ 特性
 
-- 🌍 **多语言支持** - 执行 Python、JavaScript (QuickJS) 和 Ruby 代码
+- 🌍 **多语言支持** - 执行 Python、JavaScript (QuickJS)、Ruby 和 PHP 代码
 - 📦 **函数级执行** - 调用指定函数并传递 args 和 kwargs，而非仅运行脚本
 - 🔒 **权限控制** - 基于 glob 模式的细粒度文件系统权限控制
 - 📁 **虚拟文件系统** - 内存中的文件操作，可选同步到真实文件系统
-- 🔄 **变更追踪** - 自动检测和追踪文件变更
+- 🔄 **变更追踪** - 自动检测和追踪文件变更（基于快照方案，更稳定可靠）
 - 🎯 **智能签名推断** - 自动从代码推断函数签名
 - 📊 **Schema 支持** - 可选的显式参数 Schema，实现精确控制
 - 🎪 **事件系统** - 丰富的同步事件钩子，支持中止/跳过操作
@@ -51,9 +51,23 @@ def greet(name, greeting="Hello"):
 
 console.log(result.result); // "Hi, World!"
 
-// JavaScript (QuickJS)
+// PHP (支持自动注入 <?php 标签)
+const phpResult = await executor.execute({
+  language: 'php',
+  code: `
+function multiply($a, $b) {
+    return $a * $b;
+}
+  `,
+  functionName: 'multiply',
+  args: [6, 7],
+});
+
+console.log(phpResult.result); // 42
+
+// JavaScript (支持别名: quickjs, js, javascript)
 const jsResult = await executor.execute({
-  language: 'quickjs',
+  language: 'js',
   code: `
 function calculate(a, b, options = {}) {
   const { multiplier = 1 } = options;
@@ -151,7 +165,7 @@ const executor = createExecutor({
 ```typescript
 interface FunctionCallRequest {
   // 必填
-  language: 'python' | 'ruby' | 'quickjs';
+  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript';
   code: string;
   functionName: string;
 
@@ -438,6 +452,13 @@ function func(arg1, arg2, options = {}) {  // 最后一个参数作为 options �
 ```ruby
 def func(*args, **kwargs)  # 支持可变参数和关键字参数
 end
+```
+
+### PHP 约定
+
+```php
+function func(...$args) {  // 支持可变参数和关键字参数 (通过关联数组)
+}
 ```
 
 ## 📊 结果状态

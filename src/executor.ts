@@ -16,11 +16,11 @@ import type {
 } from './types';
 
 import { PermissionResolver } from './fs/permission-resolver';
-import { TrackedFileSystem } from './fs/tracked-fs';
+import { FileSystemDiffer } from './fs/fs-differ';
 import { FSBuilder } from './fs/fs-builder';
 import { SyncManager } from './fs/sync-manager';
 import { SignatureInferenceEngine } from './inference/engine';
-import { getGenerator, RESULT_MARKERS } from './generators';
+import { getGenerator, getRuntime, RESULT_MARKERS } from './generators';
 
 // Runno 结果类型
 interface RunResultBase {
@@ -68,14 +68,14 @@ export interface ExecutorOptions {
 
 /**
  * SandboxExecutor handles the execution of code within a secure WASM-based sandbox.
- * 
+ *
  * It manages:
  * - Code generation and wrapping for different languages.
  * - Function signature inference.
  * - Virtual and mounted file systems with change tracking.
  * - Bidirectional file synchronization between host and sandbox.
  * - Secure execution with permission controls.
- * 
+ *
  * @example
  * ```typescript
  * const executor = createExecutor();
@@ -106,7 +106,7 @@ export class SandboxExecutor extends EventEmitter {
 
   /**
    * Executes a function call in the sandbox.
-   * 
+   *
    * This method follows these steps:
    * 1. Resolve function signature (via schema or inference).
    * 2. Generate execution wrapper code.
@@ -114,7 +114,7 @@ export class SandboxExecutor extends EventEmitter {
    * 4. Run the code in the WASM sandbox.
    * 5. Track file changes and handle synchronization.
    * 6. Parse and return the function result.
-   * 
+   *
    * @template T - The expected return type of the function.
    * @param request - The execution request details.
    * @returns A promise resolving to the execution result.
@@ -144,7 +144,7 @@ export class SandboxExecutor extends EventEmitter {
       );
 
       // 3. 构建文件系统
-      const { fs: proxyFS, tracker } = await this.buildFileSystem(
+      const { fs, snapshot, differ } = await this.buildFileSystem(
         fullCode,
         generator.fileExtension,
         workdir,
@@ -154,7 +154,8 @@ export class SandboxExecutor extends EventEmitter {
 
       // 4. 执行代码
       const entryPath = `${workdir}/main${generator.fileExtension}`;
-      const runResult = await runFS(request.language, entryPath, proxyFS) as RunResult;
+      const runtime = getRuntime(request.language);
+      const runResult = await runFS(runtime as any, entryPath, fs) as RunResult;
 
       // 5. 检查执行结果类型
       if (runResult.resultType !== 'complete') {
@@ -165,13 +166,14 @@ export class SandboxExecutor extends EventEmitter {
       const completeResult = runResult as RunResultComplete;
 
       // 7. 检测文件变更
-      tracker?.diffWithOriginal();
-      const changes = tracker?.getChanges() ?? {
-        created: [],
-        modified: [],
-        deleted: [],
-        denied: [],
-      };
+      const changes = differ
+        ? differ.diff(snapshot!, completeResult.fs)
+        : {
+            created: [],
+            modified: [],
+            deleted: [],
+            denied: [],
+          };
 
       // 8. 处理同步（仅当有挂载且配置为 batch 模式）
       let syncResult: SyncResult | undefined;
@@ -300,7 +302,7 @@ export class SandboxExecutor extends EventEmitter {
 
   /**
    * Manually synchronize file changes from the sandbox to the host file system.
-   * 
+   *
    * @param changes - The list of file changes to sync.
    * @param mount - The mount configuration specifying virtual to real path mappings.
    * @param options - Additional synchronization options.
@@ -337,7 +339,7 @@ export class SandboxExecutor extends EventEmitter {
     workdir: string,
     files?: Record<string, string | Uint8Array>,
     mount?: MountConfig
-  ): Promise<{ fs: WASIFS; tracker: TrackedFileSystem | null }> {
+  ): Promise<{ fs: WASIFS; snapshot?: WASIFS; differ?: FileSystemDiffer }> {
     const fsBuilder = new FSBuilder({ workdir });
 
     // 添加入口文件
@@ -361,22 +363,18 @@ export class SandboxExecutor extends EventEmitter {
       }
     }
 
-    const baseFS = fsBuilder.build();
+    const fs = fsBuilder.build();
 
     // 权限策略
     const permissionResolver = hasMount
       ? new PermissionResolver(mount!.permissions)
       : PermissionResolver.allowAll();
 
-    const onPermissionDenied = hasMount
-      ? (mount!.onPermissionDenied ?? 'throw')
-      : 'ignore';
+    // 创建差异比较器和初始快照
+    const differ = new FileSystemDiffer(permissionResolver);
+    const snapshot = FileSystemDiffer.snapshot(fs);
 
-    // 创建追踪文件系统
-    const tracker = new TrackedFileSystem(baseFS, permissionResolver, onPermissionDenied);
-    const proxyFS = tracker.getProxy();
-
-    return { fs: proxyFS, tracker };
+    return { fs, snapshot, differ };
   }
 
   /**
@@ -450,19 +448,26 @@ export class SandboxExecutor extends EventEmitter {
     result?: T;
     error?: ExecutionError;
   } {
-    const startIdx = stdout.indexOf(RESULT_MARKERS.START);
-    const endIdx = stdout.indexOf(RESULT_MARKERS.END);
+    // 移除可能存在的 HTTP 头部 (比如 php-cgi 输出的)
+    let cleanStdout = stdout;
+    const headerEndIdx = stdout.indexOf('\r\n\r\n');
+    if (headerEndIdx !== -1 && (stdout.startsWith('X-Powered-By:') || stdout.startsWith('Status:'))) {
+      cleanStdout = stdout.slice(headerEndIdx + 4);
+    }
+
+    const startIdx = cleanStdout.indexOf(RESULT_MARKERS.START);
+    const endIdx = cleanStdout.indexOf(RESULT_MARKERS.END);
 
     if (startIdx === -1 || endIdx === -1) {
       // 没有找到标记，可能是代码没有正确执行包装器
       // 尝试检查是否有错误输出
       return {
         success: true,
-        result: stdout.trim() as unknown as T,
+        result: cleanStdout.trim() as unknown as T,
       };
     }
 
-    const jsonStr = stdout
+    const jsonStr = cleanStdout
       .slice(startIdx + RESULT_MARKERS.START.length, endIdx)
       .trim();
 

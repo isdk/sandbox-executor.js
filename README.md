@@ -8,11 +8,11 @@ A powerful, type-safe library for executing functions in isolated sandbox enviro
 
 ## ✨ Features
 
-- 🌍 **Multi-Language Support** - Execute Python, JavaScript (QuickJS), and Ruby code
+- 🌍 **Multi-Language Support** - Execute Python, JavaScript (QuickJS), Ruby and PHP code
 - 📦 **Function-Level Execution** - Call specific functions with args and kwargs, not just run scripts
 - 🔒 **Permission Control** - Fine-grained file system permissions with glob patterns
 - 📁 **Virtual File System** - In-memory file operations with optional real filesystem sync
-- 🔄 **Change Tracking** - Automatic detection and tracking of file changes
+- 🔄 **Change Tracking** - Automatic detection and tracking of file changes (Snapshot-based for robustness)
 - 🎯 **Smart Signature Inference** - Automatically infers function signatures from code
 - 📊 **Schema Support** - Optional explicit parameter schemas for precise control
 - 🎪 **Event System** - Rich event hooks for sync operations with abort/skip capabilities
@@ -51,9 +51,23 @@ def greet(name, greeting="Hello"):
 
 console.log(result.result); // "Hi, World!"
 
-// JavaScript (QuickJS)
+// PHP (Supports automatic <?php tag injection)
+const phpResult = await executor.execute({
+  language: 'php',
+  code: `
+function multiply($a, $b) {
+    return $a * $b;
+}
+  `,
+  functionName: 'multiply',
+  args: [6, 7],
+});
+
+console.log(phpResult.result); // 42
+
+// JavaScript (Supports aliases: quickjs, js, javascript)
 const jsResult = await executor.execute({
-  language: 'quickjs',
+  language: 'js',
   code: `
 function calculate(a, b, options = {}) {
   const { multiplier = 1 } = options;
@@ -151,7 +165,7 @@ Executes a function in the sandbox.
 ```typescript
 interface FunctionCallRequest {
   // Required
-  language: 'python' | 'ruby' | 'quickjs';
+  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript';
   code: string;
   functionName: string;
 
@@ -438,6 +452,13 @@ function func(arg1, arg2, options = {}) {  // Last param as options object
 ```ruby
 def func(*args, **kwargs)  # Supports variadic and kwargs
 end
+```
+
+### PHP Convention
+
+```php
+function func(...$args) {  // Supports variadic and kwargs (via associative arrays)
+}
 ```
 
 ## 📊 Result Status

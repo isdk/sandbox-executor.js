@@ -1,11 +1,6 @@
 import { vi } from 'vitest';
 import type { WASIFile, WASIFS } from '../src/types';
 
-// 全局 mock 设置
-vi.mock('@runno/sandbox', () => ({
-  runFS: vi.fn(),
-}));
-
 // 测试工具函数
 export function createMockWASIFile(
   path: string,
