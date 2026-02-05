@@ -39,6 +39,12 @@ export interface SyncManagerOptions {
   fileDeleter: FileDeleter;
 }
 
+interface RollbackInfo {
+  path: string;
+  type: 'created' | 'modified';
+  originalContent?: Uint8Array;
+}
+
 /**
  * SyncManager coordinates the synchronization of file changes from the virtual sandbox
  * file system back to the real host file system.
