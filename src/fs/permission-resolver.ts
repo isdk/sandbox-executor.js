@@ -6,23 +6,47 @@ import type {
   PermissionSet,
 } from '../types';
 
+/**
+ * Result of a path permission resolution.
+ */
 export interface ResolvedPermission {
+  /** Permission to read file content. */
   read: boolean;
+  /** Permission to list directory contents. */
   list: boolean;
+  /** Permission to create new files or directories. */
   create: boolean;
+  /** Permission to modify existing files. */
   modify: boolean;
+  /** Permission to delete files or directories. */
   delete: boolean;
+  /** The rule that was matched, if any. */
   matchedRule?: PermissionRule;
 }
 
 const DEFAULT_EXCLUDE_PRIORITY = 1000;
 
+/**
+ * Resolves file system permissions for specific paths based on glob patterns.
+ * 
+ * It supports:
+ * - Default permission sets.
+ * - Prioritized rules with 'allow' and 'deny' lists.
+ * - Exclusion patterns (highest priority).
+ * - Glob pattern matching using minimatch.
+ */
 export class PermissionResolver {
   private rules: PermissionRule[];
   private defaultPerms: Required<PermissionSet>;
   private isAllowAll: boolean;
 
+  /**
+   * Creates a new PermissionResolver.
+   * @param config - The permission configuration rules and defaults.
+   * @param allowAll - If true, bypasses all rules and allows all operations.
+   */
   constructor(config?: PermissionConfig, allowAll = false) {
+    // ...
     this.isAllowAll = allowAll;
 
     if (allowAll) {
@@ -49,14 +73,14 @@ export class PermissionResolver {
   }
 
   /**
-   * 创建全开放权限解析器（用于纯虚拟模式）
+   * Creates a resolver that allows all operations on all paths.
    */
   static allowAll(): PermissionResolver {
     return new PermissionResolver(undefined, true);
   }
 
   /**
-   * 创建默认只读权限解析器
+   * Creates a resolver that only allows read and list operations by default.
    */
   static readOnly(): PermissionResolver {
     return new PermissionResolver({
@@ -64,6 +88,11 @@ export class PermissionResolver {
     });
   }
 
+  /**
+   * Resolves the full set of permissions for a given path.
+   * @param path - The virtual path to check.
+   * @returns The resolved permissions for the path.
+   */
   resolve(path: string): ResolvedPermission {
     // 全开放模式直接返回
     if (this.isAllowAll) {
@@ -86,6 +115,12 @@ export class PermissionResolver {
     return result;
   }
 
+  /**
+   * Checks if a specific operation is allowed on a path.
+   * @param path - The virtual path to check.
+   * @param operation - The operation to validate.
+   * @returns True if allowed, false otherwise.
+   */
   check(path: string, operation: Permission): boolean {
     if (this.isAllowAll) return true;
     return this.resolve(path)[operation];

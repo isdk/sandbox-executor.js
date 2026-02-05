@@ -1,4 +1,16 @@
-// src/index.ts
+/**
+ * @packageDocumentation
+ * 
+ * `@isdk/sandbox-executor` is a secure, multi-language function execution engine 
+ * based on WASM sandboxing (Runno).
+ * 
+ * Key Features:
+ * - **Multi-language**: Support for Python, Ruby, and JavaScript (QuickJS).
+ * - **Security**: Fine-grained, path-based file system permissions.
+ * - **Change Tracking**: Real-time monitoring and reporting of file system modifications.
+ * - **Host Sync**: Seamless bidirectional synchronization between host and sandbox directories.
+ * - **Signature Inference**: Automatically detect function arguments from source code.
+ */
 
 export { SandboxExecutor, createExecutor } from './executor';
 export type { ExecutorOptions } from './executor';

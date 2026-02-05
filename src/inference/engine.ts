@@ -2,15 +2,40 @@
 
 import type { FunctionSchema, ParamSchema, SupportedLanguage } from '../types';
 
+/**
+ * Represents a function signature determined by the inference engine.
+ */
 export interface InferredSignature {
+  /** List of individual parameters. */
   params: ParamSchema[];
+  /** Whether the function accepts variable positional arguments. */
   variadic: boolean;
+  /** Whether the function accepts keyword arguments (kwargs). */
   acceptsKwargs: boolean;
+  /** (JavaScript only) Whether the last parameter is an options object. */
   hasOptionsParam: boolean;
+  /** How this signature was determined. */
   source: 'schema' | 'inferred' | 'convention';
 }
 
+/**
+ * Engine for determining function signatures from source code or metadata.
+ * 
+ * It uses a priority-based approach:
+ * 1. Explicit schema provided by the user.
+ * 2. Static analysis (regex-based) of the source code.
+ * 3. Language-specific default conventions.
+ */
 export class SignatureInferenceEngine {
+  /**
+   * Resolves the signature of a function within the given code.
+   * 
+   * @param code - The source code to analyze.
+   * @param functionName - Name of the function to resolve.
+   * @param language - Programming language of the code.
+   * @param schema - Optional explicit schema to use instead of inference.
+   * @returns The resolved function signature.
+   */
   resolve(
     code: string,
     functionName: string,

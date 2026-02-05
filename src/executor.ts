@@ -51,15 +51,51 @@ interface RunResultTimeout extends RunResultBase {
 
 type RunResult = RunResultComplete | RunResultCrash | RunResultTerminated | RunResultTimeout;
 
+/**
+ * Options for configuring the SandboxExecutor.
+ */
 export interface ExecutorOptions {
+  /**
+   * The default working directory within the sandbox.
+   * Defaults to '/workspace'.
+   */
   defaultWorkdir?: string;
+  /**
+   * Configuration for synchronization events.
+   */
   syncEventConfig?: SyncEventConfig;
 }
 
+/**
+ * SandboxExecutor handles the execution of code within a secure WASM-based sandbox.
+ * 
+ * It manages:
+ * - Code generation and wrapping for different languages.
+ * - Function signature inference.
+ * - Virtual and mounted file systems with change tracking.
+ * - Bidirectional file synchronization between host and sandbox.
+ * - Secure execution with permission controls.
+ * 
+ * @example
+ * ```typescript
+ * const executor = createExecutor();
+ * const result = await executor.execute({
+ *   language: 'python',
+ *   code: 'def add(a, b): return a + b',
+ *   functionName: 'add',
+ *   args: [1, 2]
+ * });
+ * console.log(result.result); // 3
+ * ```
+ */
 export class SandboxExecutor extends EventEmitter {
   private inferenceEngine = new SignatureInferenceEngine();
   private options: Required<ExecutorOptions>;
 
+  /**
+   * Creates a new SandboxExecutor instance.
+   * @param options - Configuration options for the executor.
+   */
   constructor(options: ExecutorOptions = {}) {
     super();
     this.options = {
@@ -69,7 +105,19 @@ export class SandboxExecutor extends EventEmitter {
   }
 
   /**
-   * 执行函数调用
+   * Executes a function call in the sandbox.
+   * 
+   * This method follows these steps:
+   * 1. Resolve function signature (via schema or inference).
+   * 2. Generate execution wrapper code.
+   * 3. Build the virtual file system (including mounts and virtual files).
+   * 4. Run the code in the WASM sandbox.
+   * 5. Track file changes and handle synchronization.
+   * 6. Parse and return the function result.
+   * 
+   * @template T - The expected return type of the function.
+   * @param request - The execution request details.
+   * @returns A promise resolving to the execution result.
    */
   async execute<T = unknown>(request: FunctionCallRequest): Promise<ExecutionResult<T>> {
     const startTime = Date.now();
@@ -251,7 +299,12 @@ export class SandboxExecutor extends EventEmitter {
   }
 
   /**
-   * 手动同步文件变更
+   * Manually synchronize file changes from the sandbox to the host file system.
+   * 
+   * @param changes - The list of file changes to sync.
+   * @param mount - The mount configuration specifying virtual to real path mappings.
+   * @param options - Additional synchronization options.
+   * @returns A promise resolving to the synchronization result summary.
    */
   async syncFiles(
     changes: FileChange[],

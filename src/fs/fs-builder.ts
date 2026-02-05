@@ -4,16 +4,30 @@ export interface FSBuilderOptions {
   workdir: string;
 }
 
+/**
+ * Helper class to construct an initial WASIFS file system image.
+ * 
+ * It provides methods to add files from memory (strings or Uint8Arrays)
+ * and to load entire directory structures from the host disk.
+ */
 export class FSBuilder {
   private fs: WASIFS = {};
   private workdir: string;
 
+  /**
+   * Creates a new FSBuilder instance.
+   * @param options - Configuration including the default working directory.
+   */
   constructor(options: FSBuilderOptions) {
     this.workdir = this.normalizeWorkdir(options.workdir);
   }
 
   /**
-   * 添加入口文件（主脚本）
+   * Adds an entry file (the main script to be executed).
+   * 
+   * @param filename - Name of the file (relative to workdir or absolute).
+   * @param content - Source code string.
+   * @returns The FSBuilder instance for chaining.
    */
   addEntryFile(filename: string, content: string): this {
     const path = this.resolvePath(filename);
@@ -22,7 +36,10 @@ export class FSBuilder {
   }
 
   /**
-   * 添加虚拟文件
+   * Adds virtual files from a record object.
+   * 
+   * @param files - Map of virtual paths to content (string or Uint8Array).
+   * @returns The FSBuilder instance for chaining.
    */
   addFiles(files: Record<string, string | Uint8Array>): this {
     for (const [name, content] of Object.entries(files)) {
@@ -33,14 +50,23 @@ export class FSBuilder {
   }
 
   /**
-   * 从真实文件系统加载文件（仅 Node.js）
+   * Loads files from the host disk into the virtual file system.
+   * Only available in Node.js environments.
+   * 
+   * @param virtualPath - The target directory in the virtual file system.
+   * @param realPath - The source directory on the host disk.
+   * @param options - Loading constraints like max file size or exclusion patterns.
+   * @returns A promise resolving to the FSBuilder instance.
    */
   async loadFromDisk(
     virtualPath: string,
     realPath: string,
     options?: {
+      /** Maximum size of an individual file in bytes. */
       maxFileSize?: number;
+      /** Maximum total size of all loaded files in bytes. */
       maxTotalSize?: number;
+      /** Glob patterns of files or directories to exclude. */
       exclude?: string[];
     }
   ): Promise<this> {
@@ -105,14 +131,16 @@ export class FSBuilder {
   }
 
   /**
-   * 构建并返回 WASIFS 对象的快照
+   * Builds and returns a snapshot of the current WASIFS object.
+   * @returns A shallow copy of the internal WASIFS mapping.
    */
   build(): WASIFS {
     return { ...this.fs };
   }
 
   /**
-   * 清空文件系统
+   * Clears all files from the internal file system representation.
+   * @returns The FSBuilder instance for chaining.
    */
   clear(): this {
     this.fs = {};

@@ -7,6 +7,9 @@ import type {
 } from '../types';
 import { PermissionResolver } from './permission-resolver';
 
+/**
+ * Error thrown when a file system operation violates the configured permissions.
+ */
 export class PermissionDeniedError extends Error {
   constructor(
     public readonly path: string,
@@ -17,11 +20,27 @@ export class PermissionDeniedError extends Error {
   }
 }
 
+/**
+ * TrackedFileSystem wraps a standard WASIFS object to monitor changes and enforce permissions.
+ * 
+ * It uses a JavaScript Proxy to intercept set and delete operations,
+ * allowing it to record 'create', 'modify', and 'delete' events in real-time.
+ * It also maintains an initial snapshot to perform a final diff, ensuring no
+ * changes are missed.
+ * 
+ * Permissions are checked for every operation through the provided PermissionResolver.
+ */
 export class TrackedFileSystem {
   private originalHashes = new Map<string, string>();
   private changes = new Map<string, FileChange>();
   private deniedRecords: PermissionDeniedRecord[] = [];
 
+  /**
+   * Creates a new TrackedFileSystem.
+   * @param fs - The underlying WASIFS object.
+   * @param permissionResolver - The resolver to check permissions against.
+   * @param onDenied - Behavior when a permission is denied ('throw', 'ignore', 'virtual').
+   */
   constructor(
     private fs: WASIFS,
     private permissionResolver: PermissionResolver,
@@ -30,8 +49,14 @@ export class TrackedFileSystem {
     this.takeSnapshot();
   }
 
+  /**
+   * Returns a Proxy that intercepts file system operations.
+   * This proxy should be passed to the WASI runner.
+   * @returns The proxied WASIFS object.
+   */
   getProxy(): WASIFS {
     const self = this;
+    // ...
 
     return new Proxy(this.fs, {
       get(target, prop: string) {
@@ -98,6 +123,9 @@ export class TrackedFileSystem {
     });
   }
 
+  /**
+   * Returns a summary of all recorded changes and permission denials.
+   */
   getChanges(): {
     created: FileChange[];
     modified: FileChange[];
@@ -120,7 +148,8 @@ export class TrackedFileSystem {
   }
 
   /**
-   * Diff with original snapshot (catches changes missed by Proxy)
+   * Performs a deep comparison between the current state and the initial snapshot.
+   * This is used to detect changes that might have bypassed the Proxy traps.
    */
   diffWithOriginal(): void {
     const currentPaths = new Set(Object.keys(this.fs));
