@@ -1,6 +1,6 @@
 {
   "name": "@isdk/sandbox-executor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Isolated multi-language function executor using WebAssembly (WASM). Supports Python, JavaScript, Ruby, PHP, C/C++ with fine-grained file system permissions and virtual FS.",
   "license": "MIT",
   "author": "Riceball LEE <snowyu.lee@gmail.com>",
