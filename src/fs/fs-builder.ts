@@ -151,7 +151,7 @@ export class FSBuilder {
     return `${base}/${name}`;
   }
 
-  private createFile(path: string, content: string | Uint8Array | Buffer): WASIFile {
+  private createFile(path: string, content: string | Uint8Array | Buffer) {
     const now = new Date();
     const isString = typeof content === 'string';
 
@@ -171,6 +171,6 @@ export class FSBuilder {
         modification: now,
         change: now,
       },
-    };
+    } as WASIFile;
   }
 }
