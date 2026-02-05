@@ -1,0 +1,90 @@
+{
+  "name": "@isdk/sandbox-executor",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "Riceball LEE <snowyu.lee@gmail.com>",
+  "homepage": "https://github.com/isdk/sandbox-executor.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/isdk/sandbox-executor.js.git"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build-fast": "tsup",
+    "build": "pnpm run build-fast --dts-resolve --dts && pnpm run doc:md",
+    "clean": "rm -fr web docs dist",
+    "doc": "typedoc --plugin none --out web",
+    "doc:md": "typedoc --plugin typedoc-plugin-markdown --out docs",
+    "style": "pnpm run format:base -c && pnpm run lint",
+    "style:fix": "pnpm run format:fix && npm run lint:fix",
+    "format": "pnpm run format:base -c",
+    "format:base": "prettier \"src/**/*.{ts,tsx,js,jsx,css,scss,sass,less,md}\"",
+    "format:fix": "pnpm run format:base --write",
+    "lint": "eslint .",
+    "lint:fix": "pnpm run lint --fix",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "release": "pnpm run clean && pnpm run build && git add -f docs && git ci -m 'docs: update API docs' && pnpm dlx commit-and-tag-version -s",
+    "release.alpha": "pnpm run release -- --prerelease alpha"
+  },
+  "dependencies": {
+    "@runno/sandbox": "^0.10.2",
+    "@runno/wasi": "^0.10.0",
+    "lodash-es": "^4.17.22",
+    "minimatch": "^10.1.2"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.0.1",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/formbody": "^8.0.2",
+    "@types/jest": "^30.0.0",
+    "@types/jsdom": "^27.0.0",
+    "@types/lodash-es": "^4.17.12",
+    "@typescript-eslint/eslint-plugin": "~8.53.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-tsdoc": "^0.5.0",
+    "fastify": "^5.7.1",
+    "prettier": "^3.8.0",
+    "terser": "^5.46.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "type-fest": "^5.4.1",
+    "typedoc": "^0.28.16",
+    "typedoc-plugin-markdown": "^4.9.0",
+    "typescript": "~5.7.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^6.0.5",
+    "vitest": "^4.0.18",
+    "vitest-fetch-mock": "^0.4.5"
+  },
+  "files": [
+    "docs",
+    "dist"
+  ],
+  "keywords": [
+    "bing",
+    "web",
+    "fetch",
+    "crawler",
+    "search",
+    "structure",
+    "data"
+  ],
+  "maintainers": [
+    "Riceball LEE <snowyu.lee@gmail.com>"
+  ],
+  "engines": {
+    "node": ">=20.11.1"
+  },
+  "types": "./dist/index.d.ts"
+}

@@ -1,0 +1,178 @@
+// src/inference/engine.ts
+
+import type { FunctionSchema, ParamSchema, SupportedLanguage } from '../types';
+
+export interface InferredSignature {
+  params: ParamSchema[];
+  variadic: boolean;
+  acceptsKwargs: boolean;
+  hasOptionsParam: boolean;
+  source: 'schema' | 'inferred' | 'convention';
+}
+
+export class SignatureInferenceEngine {
+  resolve(
+    code: string,
+    functionName: string,
+    language: SupportedLanguage,
+    schema?: FunctionSchema
+  ): InferredSignature {
+    // Priority 1: User-provided schema
+    if (schema?.params) {
+      return {
+        params: schema.params,
+        variadic: schema.variadic ?? false,
+        acceptsKwargs: schema.acceptsKwargs ?? this.languageAcceptsKwargs(language),
+        hasOptionsParam: false,
+        source: 'schema',
+      };
+    }
+
+    // Priority 2: Infer from code
+    try {
+      const inferred = this.inferFromCode(code, functionName, language);
+      if (inferred) {
+        return { ...inferred, source: 'inferred' };
+      }
+    } catch (e) {
+      // Inference failed, fall through to convention
+    }
+
+    // Priority 3: Language convention
+    return this.getConvention(language);
+  }
+
+  private inferFromCode(
+    code: string,
+    functionName: string,
+    language: SupportedLanguage
+  ): Omit<InferredSignature, 'source'> | null {
+    switch (language) {
+      case 'python': return this.inferPython(code, functionName);
+      case 'quickjs': return this.inferJavaScript(code, functionName);
+      case 'ruby': return this.inferRuby(code, functionName);
+      default: return null;
+    }
+  }
+
+  private inferPython(code: string, functionName: string) {
+    const match = code.match(new RegExp(`def\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
+    if (!match) return null;
+
+    const params: ParamSchema[] = [];
+    let variadic = false;
+    let acceptsKwargs = false;
+
+    for (const part of this.splitParams(match[1])) {
+      const trimmed = part.trim();
+      if (!trimmed || trimmed === 'self' || trimmed === 'cls') continue;
+
+      if (trimmed.startsWith('**')) {
+        acceptsKwargs = true;
+      } else if (trimmed.startsWith('*') && trimmed !== '*') {
+        variadic = true;
+      } else if (trimmed !== '*') {
+        const [nameWithType, defaultVal] = trimmed.split('=').map(s => s.trim());
+        const name = nameWithType.split(':')[0].trim();
+        params.push({ name, required: !defaultVal });
+      }
+    }
+
+    return { params, variadic, acceptsKwargs, hasOptionsParam: false };
+  }
+
+  private inferJavaScript(code: string, functionName: string) {
+    const patterns = [
+      new RegExp(`function\\s+${functionName}\\s*\\(([^)]*)\\)`),
+      new RegExp(`(?:const|let|var)\\s+${functionName}\\s*=\\s*(?:async\\s*)?\\(([^)]*)\\)\\s*=>`),
+      new RegExp(`(?:const|let|var)\\s+${functionName}\\s*=\\s*(?:async\\s*)?function\\s*\\(([^)]*)\\)`),
+    ];
+
+    let paramsStr: string | null = null;
+    for (const pattern of patterns) {
+      const match = code.match(pattern);
+      if (match) { paramsStr = match[1]; break; }
+    }
+    if (!paramsStr) return null;
+
+    const params: ParamSchema[] = [];
+    let variadic = false;
+    let hasOptionsParam = false;
+
+    const parts = this.splitParams(paramsStr);
+    parts.forEach((part, i) => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      const isLast = i === parts.length - 1;
+
+      if (trimmed.startsWith('...')) {
+        variadic = true;
+      } else if (trimmed.startsWith('{')) {
+        hasOptionsParam = true;
+      } else {
+        const [name] = trimmed.split('=').map(s => s.trim());
+        if (isLast && /^(options?|opts?|config|props|params)$/i.test(name)) {
+          hasOptionsParam = true;
+        }
+        params.push({ name, required: !trimmed.includes('=') });
+      }
+    });
+
+    return { params, variadic, acceptsKwargs: false, hasOptionsParam };
+  }
+
+  private inferRuby(code: string, functionName: string) {
+    const match = code.match(new RegExp(`def\\s+${functionName}\\s*(?:\\(([^)]*)\\))?`, 'm'));
+    if (!match) return null;
+
+    const params: ParamSchema[] = [];
+    let variadic = false;
+    let acceptsKwargs = false;
+
+    for (const part of this.splitParams(match[1] || '')) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.startsWith('**')) acceptsKwargs = true;
+      else if (trimmed.startsWith('*')) variadic = true;
+      else {
+        const name = trimmed.split(/[=:]/)[0].trim();
+        params.push({ name, required: !trimmed.includes('=') && !trimmed.includes(':') });
+      }
+    }
+
+    return { params, variadic, acceptsKwargs, hasOptionsParam: false };
+  }
+
+  private getConvention(language: SupportedLanguage): InferredSignature {
+    const conventions: Record<SupportedLanguage, InferredSignature> = {
+      python: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      ruby: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      quickjs: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: true, source: 'convention' },
+    };
+    return conventions[language];
+  }
+
+  private languageAcceptsKwargs(language: SupportedLanguage): boolean {
+    return language === 'python' || language === 'ruby';
+  }
+
+  private splitParams(str: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let depth = 0;
+
+    for (const char of str) {
+      if ('([{'.includes(char)) depth++;
+      if (')]}'.includes(char)) depth--;
+      if (char === ',' && depth === 0) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    if (current.trim()) result.push(current);
+    return result;
+  }
+}

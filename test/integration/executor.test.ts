@@ -1,0 +1,452 @@
+// tests/integration/executor.test.ts
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { runFS } from '@runno/sandbox';
+import { SandboxExecutor, createExecutor } from '../../src/executor';
+import {
+  mockCompleteResult,
+  mockCrashResult,
+  mockTimeoutResult,
+  mockTerminatedResult,
+  createSuccessOutput,
+  createErrorOutput,
+} from '../mocks/runno';
+
+vi.mock('@runno/sandbox');
+const mockRunFS = vi.mocked(runFS);
+
+describe('SandboxExecutor', () => {
+  let executor: SandboxExecutor;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    executor = createExecutor();
+  });
+
+  describe('基本执行', () => {
+    it('应该成功执行简单函数', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput(42)) as any
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def answer(): return 42',
+        functionName: 'answer',
+      });
+
+      expect(result.status).toBe('success');
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(42);
+    });
+
+    it('应该传递位置参数', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput(3))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def add(a, b): return a + b',
+        functionName: 'add',
+        args: [1, 2],
+      });
+
+      expect(mockRunFS).toHaveBeenCalled();
+      const [, entryPath, fs] = mockRunFS.mock.calls[0];
+      const code = fs[entryPath].content as string;
+      expect(code).toContain('add(1, 2)');
+    });
+
+    it('应该传递关键字参数', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('Hi, World!'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def greet(name, greeting="Hello"): return f"{greeting}, {name}!"',
+        functionName: 'greet',
+        args: ['World'],
+        kwargs: { greeting: 'Hi' },
+      });
+
+      const [, , fs] = mockRunFS.mock.calls[0];
+      const code = Object.values(fs)[0].content as string;
+      expect(code).toContain('greeting="Hi"');
+    });
+  });
+
+  describe('多语言支持', () => {
+    it('应该支持 Python', async () => {
+      mockRunFS.mockResolvedValue(mockCompleteResult(createSuccessOutput(1)));
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        'python',
+        expect.stringContaining('.py'),
+        expect.any(Object)
+      );
+    });
+
+    it('应该支持 JavaScript (QuickJS)', async () => {
+      mockRunFS.mockResolvedValue(mockCompleteResult(createSuccessOutput(1)));
+
+      await executor.execute({
+        language: 'quickjs',
+        code: 'function func() {}',
+        functionName: 'func',
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        'quickjs',
+        expect.stringContaining('.js'),
+        expect.any(Object)
+      );
+    });
+
+    it('应该支持 Ruby', async () => {
+      mockRunFS.mockResolvedValue(mockCompleteResult(createSuccessOutput(1)));
+
+      await executor.execute({
+        language: 'ruby',
+        code: 'def func\nend',
+        functionName: 'func',
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        'ruby',
+        expect.stringContaining('.rb'),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('结果类型处理', () => {
+    it('应该处理 complete 结果', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('done'))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): return "done"',
+        functionName: 'func',
+      });
+
+      expect(result.status).toBe('success');
+    });
+
+    it('应该处理 crash 结果', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCrashResult(new Error('WASM crashed'))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.status).toBe('crash');
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('crashed');
+    });
+
+    it('应该处理 timeout 结果', async () => {
+      mockRunFS.mockResolvedValue(mockTimeoutResult());
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.status).toBe('timeout');
+      expect(result.exitCode).toBe(124);
+    });
+
+    it('应该处理 terminated 结果', async () => {
+      mockRunFS.mockResolvedValue(mockTerminatedResult());
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.status).toBe('terminated');
+      expect(result.exitCode).toBe(143);
+    });
+  });
+
+  describe('函数执行错误', () => {
+    it('应该捕获函数抛出的异常', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createErrorOutput('Division by zero', 'ZeroDivisionError'))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def divide(a, b): return a / b',
+        functionName: 'divide',
+        args: [1, 0],
+      });
+
+      expect(result.status).toBe('error');
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toBe('Division by zero');
+      expect(result.error?.type).toBe('ZeroDivisionError');
+    });
+  });
+
+  describe('复杂返回值', () => {
+    it('应该处理对象返回值', async () => {
+      const returnValue = { name: 'Alice', age: 30, active: true };
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput(returnValue))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def get_user(): return {"name": "Alice", "age": 30, "active": True}',
+        functionName: 'get_user',
+      });
+
+      expect(result.result).toEqual(returnValue);
+    });
+
+    it('应该处理数组返回值', async () => {
+      const returnValue = [1, 2, 3, 4, 5];
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput(returnValue))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def get_list(): return [1, 2, 3, 4, 5]',
+        functionName: 'get_list',
+      });
+
+      expect(result.result).toEqual(returnValue);
+    });
+
+    it('应该处理 null 返回值', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput(null))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def get_none(): return None',
+        functionName: 'get_none',
+      });
+
+      expect(result.result).toBeNull();
+    });
+  });
+
+  describe('虚拟文件', () => {
+    it('应该添加虚拟文件到文件系统', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def read_file(): pass',
+        functionName: 'read_file',
+        files: {
+          'data.txt': 'hello world',
+          'config.json': '{"key": "value"}',
+        },
+      });
+
+      const [, , fs] = mockRunFS.mock.calls[0];
+      expect(fs['/workspace/data.txt']).toBeDefined();
+      expect(fs['/workspace/data.txt'].content).toBe('hello world');
+      expect(fs['/workspace/config.json']).toBeDefined();
+    });
+
+    it('应该支持绝对路径的虚拟文件', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        files: {
+          '/custom/path/file.txt': 'content',
+        },
+      });
+
+      const [, , fs] = mockRunFS.mock.calls[0];
+      expect(fs['/custom/path/file.txt']).toBeDefined();
+    });
+
+    it('应该支持二进制文件', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        files: {
+          'binary.bin': binaryData,
+        },
+      });
+
+      const [, , fs] = mockRunFS.mock.calls[0];
+      expect(fs['/workspace/binary.bin'].mode).toBe('binary');
+    });
+  });
+
+  describe('工作目录', () => {
+    it('应该使用默认工作目录', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        'python',
+        '/workspace/main.py',
+        expect.any(Object)
+      );
+    });
+
+    it('应该支持自定义工作目录', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        workdir: '/custom',
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        'python',
+        '/custom/main.py',
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('元信息', () => {
+    it('应该返回执行时长', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.meta?.duration).toBeGreaterThanOrEqual(0);
+    });
+
+    it('应该返回签名来源', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      // 使用 schema
+      const result1 = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        schema: { params: [{ name: 'x' }] },
+      });
+      expect(result1.meta?.signatureSource).toBe('schema');
+
+      // 使用推断
+      const result2 = await executor.execute({
+        language: 'python',
+        code: 'def add(a, b): pass',
+        functionName: 'add',
+      });
+      expect(result2.meta?.signatureSource).toBe('inferred');
+    });
+  });
+
+  describe('文件变更追踪', () => {
+    it('应该追踪创建的文件', async () => {
+      const resultFS = {
+        '/workspace/main.py': {
+          path: '/workspace/main.py',
+          content: 'code',
+          mode: 'string' as const,
+          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
+        },
+        '/workspace/output.txt': {
+          path: '/workspace/output.txt',
+          content: 'created by code',
+          mode: 'string' as const,
+          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
+        },
+      };
+
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'), { fs: resultFS })
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def create_file(): pass',
+        functionName: 'create_file',
+      });
+
+      // 注意：由于我们是在执行后对比，新创建的 output.txt 会被检测到
+      expect(result.files).toBeDefined();
+    });
+
+    it('resultOptions.includeChanges = false 时不应该返回文件变更', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        resultOptions: { includeChanges: false },
+      });
+
+      expect(result.files).toBeUndefined();
+    });
+  });
+
+  describe('createExecutor 工厂函数', () => {
+    it('应该创建执行器实例', () => {
+      const exec = createExecutor();
+      expect(exec).toBeInstanceOf(SandboxExecutor);
+    });
+
+    it('应该接受配置选项', () => {
+      const exec = createExecutor({
+        defaultWorkdir: '/custom',
+      });
+      expect(exec).toBeDefined();
+    });
+  });
+});
