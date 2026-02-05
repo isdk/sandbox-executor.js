@@ -420,18 +420,21 @@ The library automatically infers function signatures with a three-tier priority:
 3. **Convention** (lowest) - Language-specific defaults
 
 ### Python Convention
+
 ```python
 def func(*args, **kwargs):  # Supports variadic and kwargs
     pass
 ```
 
 ### JavaScript Convention
+
 ```javascript
 function func(arg1, arg2, options = {}) {  // Last param as options object
 }
 ```
 
 ### Ruby Convention
+
 ```ruby
 def func(*args, **kwargs)  # Supports variadic and kwargs
 end
@@ -545,4 +548,3 @@ MIT © [Riceball LEE](https://github.com/snowyu)
 - [@runno/sandbox](https://runno.dev/) - WebAssembly-based code execution
 - [events-ex](https://www.npmjs.com/package/events-ex) - Enhanced event emitter
 - [minimatch](https://github.com/isaacs/minimatch) - Glob pattern matching
-

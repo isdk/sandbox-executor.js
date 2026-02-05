@@ -420,18 +420,21 @@ await executor.syncFiles(toSync, { dirs: { '/workspace': './output' } });
 3. **Convention**（最低优先级）- 语言特定的默认约定
 
 ### Python 约定
+
 ```python
 def func(*args, **kwargs):  # 支持可变参数和关键字参数
     pass
 ```
 
 ### JavaScript 约定
+
 ```javascript
 function func(arg1, arg2, options = {}) {  // 最后一个参数作为 options 对象
 }
 ```
 
 ### Ruby 约定
+
 ```ruby
 def func(*args, **kwargs)  # 支持可变参数和关键字参数
 end
@@ -545,23 +548,3 @@ MIT © [Your Name](https://github.com/username)
 - [@runno/sandbox](https://runno.dev/) - 基于 WebAssembly 的代码执行
 - [events-ex](https://www.npmjs.com/package/events-ex) - 增强的事件发射器
 - [minimatch](https://github.com/isaacs/minimatch) - Glob 模式匹配
-```
-
----
-
-## 项目徽章说明
-
-如需添加更多徽章，可以使用：
-
-```markdown
-<!-- 测试覆盖率 -->
-[![Coverage](https://codecov.io/gh/isdk/sandbox-executor.js/branch/main/graph/badge.svg)](https://codecov.io/gh/isdk/sandbox-executor.js)
-
-<!-- CI 状态 -->
-[![CI](https://github.com/isdk/sandbox-executor.js/workflows/CI/badge.svg)](https://github.com/isdk/sandbox-executor.js/actions)
-
-<!-- 下载量 -->
-[![npm downloads](https://img.shields.io/npm/dm/@isdk/sandbox-executor.svg)](https://www.npmjs.com/package/@isdk/sandbox-executor)
-
-<!-- Bundle 大小 -->
-[![Bundle Size](https://img.shields.io/bundlephobia/minzip/@isdk/sandbox-executor)](https://bundlephobia.com/package/@isdk/sandbox-executor)
