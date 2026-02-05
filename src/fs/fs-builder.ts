@@ -9,11 +9,11 @@ export class FSBuilder {
   private workdir: string;
 
   constructor(options: FSBuilderOptions) {
-    this.workdir = options.workdir;
+    this.workdir = this.normalizeWorkdir(options.workdir);
   }
 
   /**
-   * Add entry file (main script)
+   * 添加入口文件（主脚本）
    */
   addEntryFile(filename: string, content: string): this {
     const path = this.resolvePath(filename);
@@ -22,7 +22,7 @@ export class FSBuilder {
   }
 
   /**
-   * Add virtual files
+   * 添加虚拟文件
    */
   addFiles(files: Record<string, string | Uint8Array>): this {
     for (const [name, content] of Object.entries(files)) {
@@ -33,7 +33,7 @@ export class FSBuilder {
   }
 
   /**
-   * Load files from real filesystem (Node.js only)
+   * 从真实文件系统加载文件（仅 Node.js）
    */
   async loadFromDisk(
     virtualPath: string,
@@ -44,7 +44,6 @@ export class FSBuilder {
       exclude?: string[];
     }
   ): Promise<this> {
-    // Check if we're in Node.js environment
     if (typeof process === 'undefined' || !process.versions?.node) {
       console.warn('loadFromDisk is only available in Node.js environment');
       return this;
@@ -59,13 +58,18 @@ export class FSBuilder {
     const maxFile = options?.maxFileSize ?? Infinity;
 
     const walk = async (dir: string, virtualDir: string): Promise<void> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch (e) {
+        console.warn(`Failed to read directory ${dir}:`, e);
+        return;
+      }
 
       for (const entry of entries) {
         const realEntryPath = path.join(dir, entry.name);
-        const virtualEntryPath = `${virtualDir}/${entry.name}`;
+        const virtualEntryPath = this.joinPath(virtualDir, entry.name);
 
-        // Check exclude patterns
         if (options?.exclude?.some(p => minimatch(entry.name, p))) {
           continue;
         }
@@ -73,23 +77,26 @@ export class FSBuilder {
         if (entry.isDirectory()) {
           await walk(realEntryPath, virtualEntryPath);
         } else if (entry.isFile()) {
-          const stat = await fs.stat(realEntryPath);
+          try {
+            const stat = await fs.stat(realEntryPath);
 
-          if (stat.size > maxFile) {
-            console.warn(`Skipping ${realEntryPath}: exceeds maxFileSize`);
-            continue;
+            if (stat.size > maxFile) {
+              console.warn(`Skipping ${realEntryPath}: exceeds maxFileSize (${stat.size} > ${maxFile})`);
+              continue;
+            }
+
+            if (totalSize + stat.size > maxTotal) {
+              console.warn(`Skipping ${realEntryPath}: would exceed maxTotalSize`);
+              continue;
+            }
+
+            const content = await fs.readFile(realEntryPath);
+            this.fs[virtualEntryPath] = this.createFile(virtualEntryPath, content);
+            totalSize += stat.size;
+          } catch (e) {
+            console.warn(`Failed to read file ${realEntryPath}:`, e);
           }
-
-          if (totalSize + stat.size > maxTotal) {
-            console.warn(`Skipping ${realEntryPath}: would exceed maxTotalSize`);
-            continue;
-          }
-
-          const content = await fs.readFile(realEntryPath);
-          this.fs[virtualEntryPath] = this.createFile(virtualEntryPath, content);
-          totalSize += stat.size;
         }
-        // Skip symlinks, devices, etc.
       }
     };
 
@@ -97,30 +104,73 @@ export class FSBuilder {
     return this;
   }
 
+  /**
+   * 构建并返回 WASIFS 对象的快照
+   */
   build(): WASIFS {
-    return this.fs;
+    return { ...this.fs };
   }
 
+  /**
+   * 清空文件系统
+   */
+  clear(): this {
+    this.fs = {};
+    return this;
+  }
+
+  /**
+   * 规范化工作目录
+   */
+  private normalizeWorkdir(workdir: string): string {
+    // 移除尾部斜杠（除非是根目录）
+    if (workdir.length > 1 && workdir.endsWith('/')) {
+      return workdir.slice(0, -1);
+    }
+    return workdir;
+  }
+
+  /**
+   * 解析文件路径
+   */
   private resolvePath(name: string): string {
+    // 绝对路径直接返回
     if (name.startsWith('/')) {
       return name;
     }
-    return `${this.workdir}/${name}`;
+    return this.joinPath(this.workdir, name);
   }
 
-  private createFile(path: string, content: string | Uint8Array) {
+  /**
+   * 连接路径，正确处理根目录
+   */
+  private joinPath(base: string, name: string): string {
+    if (base === '/') {
+      return `/${name}`;
+    }
+    return `${base}/${name}`;
+  }
+
+  private createFile(path: string, content: string | Uint8Array | Buffer): WASIFile {
     const now = new Date();
     const isString = typeof content === 'string';
 
+    let finalContent: string | Uint8Array;
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(content)) {
+      finalContent = new Uint8Array(content);
+    } else {
+      finalContent = content as string | Uint8Array;
+    }
+
     return {
       path,
-      content: content,
+      content: finalContent,
       mode: isString ? 'string' : 'binary',
       timestamps: {
         access: now,
         modification: now,
         change: now,
       },
-    } as WASIFile;
+    };
   }
 }
