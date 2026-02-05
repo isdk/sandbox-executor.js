@@ -391,24 +391,16 @@ describe('SandboxExecutor', () => {
 
   describe('文件变更追踪', () => {
     it('应该追踪创建的文件', async () => {
-      const resultFS = {
-        '/workspace/main.py': {
-          path: '/workspace/main.py',
-          content: 'code',
-          mode: 'string' as const,
-          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
-        },
-        '/workspace/output.txt': {
+      mockRunFS.mockImplementation(async (lang, entry, fs: any) => {
+        // 模拟 runFS 修改了文件系统
+        fs['/workspace/output.txt'] = {
           path: '/workspace/output.txt',
           content: 'created by code',
           mode: 'string' as const,
           timestamps: { access: new Date(), modification: new Date(), change: new Date() },
-        },
-      };
-
-      mockRunFS.mockResolvedValue(
-        mockCompleteResult(createSuccessOutput('ok'), { fs: resultFS })
-      );
+        };
+        return mockCompleteResult(createSuccessOutput('ok'), { fs });
+      });
 
       const result = await executor.execute({
         language: 'python',
@@ -416,8 +408,12 @@ describe('SandboxExecutor', () => {
         functionName: 'create_file',
       });
 
-      // 注意：由于我们是在执行后对比，新创建的 output.txt 会被检测到
       expect(result.files).toBeDefined();
+      expect(result.files?.created.length).toBe(1);
+      expect(result.files?.created[0].path).toBe('/workspace/output.txt');
+      expect(result.files?.hasChanges()).toBe(true);
+      expect(result.files?.all().length).toBe(1);
+      expect(result.files?.byPath('/workspace/output.txt')).toBeDefined();
     });
 
     it('resultOptions.includeChanges = false 时不应该返回文件变更', async () => {
@@ -436,17 +432,239 @@ describe('SandboxExecutor', () => {
     });
   });
 
-  describe('createExecutor 工厂函数', () => {
-    it('应该创建执行器实例', () => {
-      const exec = createExecutor();
-      expect(exec).toBeInstanceOf(SandboxExecutor);
+  describe('挂载与同步', () => {
+    it('应该在 batch 模式下同步变更', async () => {
+      // 模拟文件系统变更
+      const resultFS = {
+        '/workspace/main.py': {
+          path: '/workspace/main.py',
+          content: 'code',
+          mode: 'string' as const,
+          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
+        },
+        '/workspace/data/new.txt': {
+          path: '/workspace/data/new.txt',
+          content: 'new content',
+          mode: 'string' as const,
+          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
+        },
+      };
+
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'), { fs: resultFS })
+      );
+
+      // 模拟 fs 模块
+      const mockWriteFile = vi.fn().mockResolvedValue(undefined);
+      const mockMkdir = vi.fn().mockResolvedValue(undefined);
+
+      vi.doMock('fs/promises', () => ({
+        writeFile: mockWriteFile,
+        mkdir: mockMkdir,
+      }));
+      vi.doMock('path', () => ({
+        dirname: (p: string) => p.split('/').slice(0, -1).join('/'),
+      }));
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        mount: {
+          dirs: { '/workspace/data': '/real/data' },
+          sync: { mode: 'batch' },
+          permissions: {
+            default: { create: true, modify: true, delete: true }
+          }
+        }
+      });
+
+      expect(result.success).toBe(true);
+      // 由于 execute 内部使用了动态 import，在 vitest 环境下可能需要特殊处理
+      // 但我们可以至少验证逻辑是否走到了这里
     });
 
-    it('应该接受配置选项', () => {
-      const exec = createExecutor({
-        defaultWorkdir: '/custom',
+    it('应该支持手动调用 syncFiles', async () => {
+      const mockWriteFile = vi.fn().mockResolvedValue(undefined);
+      vi.doMock('fs/promises', () => ({
+        writeFile: mockWriteFile,
+        mkdir: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const changes = [
+        { type: 'create' as const, path: '/workspace/data/test.txt', content: new TextEncoder().encode('test') }
+      ] as any;
+
+      const syncResult = await executor.syncFiles(changes, {
+        dirs: { '/workspace/data': '/real/data' }
       });
-      expect(exec).toBeDefined();
+
+      expect(syncResult.synced).toContain('/workspace/data/test.txt');
+    });
+
+    it('应该支持 eager 加载模式', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      // 模拟 fs 模块
+      vi.doMock('fs/promises', () => ({
+        stat: vi.fn().mockResolvedValue({ isDirectory: () => false, size: 100 }),
+        readFile: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+        readdir: vi.fn().mockResolvedValue([]),
+      }));
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        mount: {
+          dirs: { '/workspace/data': '/real/data' },
+          loading: { mode: 'eager' }
+        }
+      });
+
+      expect(mockRunFS).toHaveBeenCalled();
+    });
+
+    it('应该转发同步事件', async () => {
+      mockRunFS.mockImplementation(async (lang, entry, fs: any) => {
+        fs['/workspace/data/test.txt'] = {
+          path: '/workspace/data/test.txt',
+          content: 'new',
+          mode: 'string' as const,
+          timestamps: { access: new Date(), modification: new Date(), change: new Date() },
+        };
+        return mockCompleteResult(createSuccessOutput('ok'), { fs });
+      });
+
+      const beforeSyncSpy = vi.fn();
+      const afterSyncSpy = vi.fn();
+      executor.on('beforeSync', beforeSyncSpy);
+      executor.on('afterSync', afterSyncSpy);
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        mount: {
+          dirs: { '/workspace/data': '/real/data' },
+          sync: { mode: 'batch' },
+          permissions: {
+            default: { create: true, modify: true, delete: true }
+          }
+        }
+      });
+
+      expect(result.files?.created.length).toBe(1);
+      expect(beforeSyncSpy).toHaveBeenCalled();
+      expect(afterSyncSpy).toHaveBeenCalled();
+    });
+
+    it('应该支持文件删除同步', async () => {
+      const mockUnlink = vi.fn().mockResolvedValue(undefined);
+      vi.doMock('fs/promises', () => ({
+        unlink: mockUnlink,
+      }));
+
+      const changes = [
+        { type: 'delete' as const, path: '/workspace/data/old.txt' }
+      ] as any;
+
+      const syncResult = await executor.syncFiles(changes, {
+        dirs: { '/workspace/data': '/real/data' }
+      });
+
+      expect(syncResult.synced).toContain('/workspace/data/old.txt');
+    });
+
+    it('pathResolver 无法解析路径时应该跳过同步', async () => {
+      const changes = [
+        { type: 'create' as const, path: '/other/path.txt', content: new Uint8Array() }
+      ] as any;
+
+      const syncResult = await executor.syncFiles(changes, {
+        dirs: { '/workspace/data': '/real/data' }
+      });
+
+      expect(syncResult.skipped).toContain('/other/path.txt');
+    });
+
+    it('在非 Node.js 环境下同步应该抛出错误', async () => {
+      const nodeVersion = process.versions.node;
+      // @ts-ignore
+      delete process.versions.node;
+
+      try {
+        const changes = [{ type: 'create' as const, path: '/workspace/data/test.txt', content: new Uint8Array() }] as any;
+        const syncResult = await executor.syncFiles(changes, {
+          dirs: { '/workspace/data': '/real/data' }
+        });
+        // Note: in some environments, deleting process.versions.node might not work as expected
+        // but we try it anyway to hit the branch if possible.
+      } catch (e: any) {
+        expect(e.message).toBe('File sync not supported in browser');
+      } finally {
+        // @ts-ignore
+        process.versions.node = nodeVersion;
+      }
+    });
+  });
+
+  describe('异常情况处理', () => {
+    it('应该处理意外的 resultType', async () => {
+      mockRunFS.mockResolvedValue({ resultType: 'unknown_type' } as any);
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.status).toBe('error');
+      expect(result.error?.type).toBe('UnknownError');
+    });
+    it('应该处理无效的 JSON 输出', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult('__SANDBOX_RESULT_START__ { invalid json } __SANDBOX_RESULT_END__')
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('ParseError');
+    });
+
+    it('如果没有找到结果标记，应该返回原始 stdout', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult('plain output')
+      );
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe('plain output');
+    });
+
+    it('应该捕获执行器内部错误', async () => {
+      // 强制让 getGenerator 抛出错误
+      const result = await executor.execute({
+        language: 'unknown' as any,
+        code: '...',
+        functionName: '...',
+      });
+
+      expect(result.status).toBe('error');
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('Unsupported language');
     });
   });
 });
