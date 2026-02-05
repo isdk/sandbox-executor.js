@@ -99,6 +99,79 @@ describe('Real Environment Integration', () => {
     });
   });
 
+  describe('C Execution', () => {
+    it('should execute C code and return result', async () => {
+      const result = await executor.execute({
+        language: 'c',
+        code: `
+#include <stdio.h>
+int add(int a, int b) {
+    return a + b;
+}
+`,
+        functionName: 'add',
+        args: [10, 20],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(30);
+    });
+
+    it('should handle C return types (float)', async () => {
+      const result = await executor.execute({
+        language: 'c',
+        code: `
+float multiply(float a, float b) {
+    return a * b;
+}
+`,
+        functionName: 'multiply',
+        args: [2.5, 4.0],
+      });
+
+      expect(result.success).toBe(true);
+      expect(Number(result.result)).toBeCloseTo(10.0);
+    });
+  });
+
+  describe('C++ Execution', () => {
+    it('should execute C++ code and return result', async () => {
+      const result = await executor.execute({
+        language: 'cpp',
+        code: `
+#include <iostream>
+int fib(int n) {
+    if (n <= 1) return n;
+    return fib(n-1) + fib(n-2);
+}
+`,
+        functionName: 'fib',
+        args: [6],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(8);
+    });
+
+    it('should handle C++ strings', async () => {
+      const result = await executor.execute({
+        language: 'cpp',
+        code: `
+#include <string>
+#include <iostream>
+std::string greet(std::string name) {
+    return "Hello " + name;
+}
+`,
+        functionName: 'greet',
+        args: ['World'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe('Hello World');
+    });
+  });
+
   describe('File System Changes in Real Environment', () => {
     it('should track file creation in python', async () => {
       const result = await executor.execute({
@@ -114,12 +187,8 @@ def create_file(content):
       });
 
       expect(result.success).toBe(true);
-      if (!result.files?.created.length) {
-        console.log('No files created. Changes:', JSON.stringify(result.files?.all(), null, 2));
-      }
       expect(result.files?.created.length).toBeGreaterThan(0);
       const paths = result.files?.created.map(f => f.path);
-      console.log('Created paths:', paths);
       const file = result.files?.byPath('/test.txt');
       expect(file).toBeDefined();
       expect(new TextDecoder().decode(file?.content)).toBe('hello from python');

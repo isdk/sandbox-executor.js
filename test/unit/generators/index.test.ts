@@ -46,7 +46,7 @@ describe('generators/index', () => {
   });
 
   describe('所有生成器', () => {
-    const languages = ['python', 'quickjs', 'ruby'] as const;
+    const languages = ['python', 'quickjs', 'ruby', 'clang', 'clangpp'] as const;
 
     languages.forEach(lang => {
       describe(`${lang} 生成器`, () => {

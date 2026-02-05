@@ -8,7 +8,7 @@
 
 ## ✨ 特性
 
-- 🌍 **多语言支持** - 执行 Python、JavaScript (QuickJS)、Ruby 和 PHP 代码
+- 🌍 **多语言支持** - 执行 Python、JavaScript (QuickJS)、Ruby、PHP、C 和 C++ 代码
 - 📦 **函数级执行** - 调用指定函数并传递 args 和 kwargs，而非仅运行脚本
 - 🔒 **权限控制** - 基于 glob 模式的细粒度文件系统权限控制
 - 📁 **虚拟文件系统** - 内存中的文件操作，可选同步到真实文件系统
@@ -165,7 +165,7 @@ const executor = createExecutor({
 ```typescript
 interface FunctionCallRequest {
   // 必填
-  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript';
+  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript' | 'c' | 'cpp';
   code: string;
   functionName: string;
 
@@ -545,7 +545,7 @@ switch (result.status) {
 
 ## 📄 许可证
 
-MIT © [Your Name](https://github.com/username)
+MIT © [Riceball LEE](https://github.com/snowyu)
 
 ## 🙏 致谢
 

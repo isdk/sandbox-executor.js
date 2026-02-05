@@ -4,6 +4,8 @@ import { PythonGenerator } from './python';
 import { JavaScriptGenerator } from './javascript';
 import { RubyGenerator } from './ruby';
 import { PHPGenerator } from './php';
+import { CGenerator } from './c';
+import { CppGenerator } from './cpp';
 
 const jsGenerator = new JavaScriptGenerator();
 const generators = new Map<string, CodeGenerator>([
@@ -11,6 +13,8 @@ const generators = new Map<string, CodeGenerator>([
   ['quickjs', jsGenerator],
   ['ruby', new RubyGenerator()],
   ['php', new PHPGenerator()],
+  ['clang', new CGenerator()],
+  ['clangpp', new CppGenerator()],
 ]);
 
 export function getCanonicalLanguage(language: SupportedLanguage): string {
@@ -18,6 +22,13 @@ export function getCanonicalLanguage(language: SupportedLanguage): string {
     case 'js':
     case 'javascript':
       return 'quickjs';
+    case 'c':
+    case 'clang':
+      return 'clang';
+    case 'cpp':
+    case 'c++' as any: // In case someone uses c++
+    case 'clangpp':
+      return 'clangpp';
     default:
       return language;
   }
@@ -43,3 +54,5 @@ export { PythonGenerator } from './python';
 export { JavaScriptGenerator } from './javascript';
 export { RubyGenerator } from './ruby';
 export { PHPGenerator } from './php';
+export { CGenerator } from './c';
+export { CppGenerator } from './cpp';

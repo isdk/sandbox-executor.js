@@ -8,7 +8,7 @@ A powerful, type-safe library for executing functions in isolated sandbox enviro
 
 ## ✨ Features
 
-- 🌍 **Multi-Language Support** - Execute Python, JavaScript (QuickJS), Ruby and PHP code
+- 🌍 **Multi-Language Support** - Execute Python, JavaScript (QuickJS), Ruby, PHP, C and C++ code
 - 📦 **Function-Level Execution** - Call specific functions with args and kwargs, not just run scripts
 - 🔒 **Permission Control** - Fine-grained file system permissions with glob patterns
 - 📁 **Virtual File System** - In-memory file operations with optional real filesystem sync
@@ -165,7 +165,7 @@ Executes a function in the sandbox.
 ```typescript
 interface FunctionCallRequest {
   // Required
-  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript';
+  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript' | 'c' | 'cpp';
   code: string;
   functionName: string;
 

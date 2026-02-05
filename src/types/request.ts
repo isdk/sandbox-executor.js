@@ -105,7 +105,17 @@ export interface FunctionSchema {
 /**
  * Supported programming languages for the sandbox.
  */
-export type SupportedLanguage = 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript';
+export type SupportedLanguage =
+  | 'python'
+  | 'ruby'
+  | 'quickjs'
+  | 'php'
+  | 'js'
+  | 'javascript'
+  | 'c'
+  | 'cpp'
+  | 'clang'
+  | 'clangpp';
 
 /**
  * Options for customizing the execution result.

@@ -202,6 +202,40 @@ class MyClass:
     });
   });
 
+  describe('优先级 2: C 推断', () => {
+    it('应该推断简单 C 函数', () => {
+      const code = 'int add(int a, int b) { return a + b; }';
+      const result = engine.resolve(code, 'add', 'c');
+
+      expect(result.source).toBe('inferred');
+      expect(result.returnType).toBe('int');
+      expect(result.params).toHaveLength(2);
+      expect(result.params[0].name).toBe('a');
+      expect(result.params[1].name).toBe('b');
+    });
+
+    it('应该推断带指针的 C 函数', () => {
+      const code = 'char* greet(const char* name) { return "hello"; }';
+      const result = engine.resolve(code, 'greet', 'c');
+
+      expect(result.returnType).toBe('char*');
+      expect(result.params).toHaveLength(1);
+      expect(result.params[0].name).toBe('name');
+    });
+  });
+
+  describe('优先级 2: C++ 推断', () => {
+    it('应该推断简单 C++ 函数', () => {
+      const code = 'double multiply(double x, double y) { return x * y; }';
+      const result = engine.resolve(code, 'multiply', 'cpp');
+
+      expect(result.source).toBe('inferred');
+      expect(result.returnType).toBe('double');
+      expect(result.params).toHaveLength(2);
+      expect(result.params[0].name).toBe('x');
+    });
+  });
+
   describe('优先级 3: 语言约定', () => {
     it('Python 约定应该支持 variadic 和 kwargs', () => {
       // 使用无法解析的代码
@@ -233,6 +267,18 @@ class MyClass:
       expect(result.source).toBe('convention');
       expect(result.variadic).toBe(true);
       expect(result.acceptsKwargs).toBe(true);
+    });
+
+    it('C 约定应该有默认返回类型', () => {
+      const result = engine.resolve('invalid', 'unknown', 'c');
+      expect(result.source).toBe('convention');
+      expect(result.returnType).toBe('int');
+    });
+
+    it('C++ 约定应该有默认返回类型', () => {
+      const result = engine.resolve('invalid', 'unknown', 'cpp');
+      expect(result.source).toBe('convention');
+      expect(result.returnType).toBe('int');
     });
   });
 

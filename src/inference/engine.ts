@@ -16,6 +16,8 @@ export interface InferredSignature {
   hasOptionsParam: boolean;
   /** How this signature was determined. */
   source: 'schema' | 'inferred' | 'convention';
+  /** The return type of the function (for C/C++). */
+  returnType?: string;
 }
 
 /**
@@ -74,6 +76,12 @@ export class SignatureInferenceEngine {
       case 'js':
       case 'javascript':
         return 'quickjs';
+      case 'c':
+      case 'clang':
+        return 'clang';
+      case 'cpp':
+      case 'clangpp':
+        return 'clangpp';
       default:
         return language;
     }
@@ -89,8 +97,40 @@ export class SignatureInferenceEngine {
       case 'quickjs': return this.inferJavaScript(code, functionName);
       case 'ruby': return this.inferRuby(code, functionName);
       case 'php': return this.inferPHP(code, functionName);
+      case 'clang':
+      case 'c':
+        return this.inferC(code, functionName);
+      case 'clangpp':
+      case 'cpp':
+        return this.inferCpp(code, functionName);
       default: return null;
     }
+  }
+
+  private inferC(code: string, functionName: string) {
+    // Basic C function regex: returnType functionName(params)
+    const match = code.match(new RegExp(`([\\w\\s\\*]+)\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
+    if (!match) return null;
+
+    const returnType = match[1].trim();
+    const params: ParamSchema[] = [];
+
+    for (const part of this.splitParams(match[2])) {
+      const trimmed = part.trim();
+      if (!trimmed || trimmed === 'void') continue;
+
+      // Basic C param: type name
+      const parts = trimmed.split(/\s+/);
+      const name = parts[parts.length - 1].replace(/^\*/, ''); // handle pointers
+      params.push({ name, required: true });
+    }
+
+    return { params, variadic: false, acceptsKwargs: false, hasOptionsParam: false, returnType };
+  }
+
+  private inferCpp(code: string, functionName: string) {
+    // Similar to C but might have namespaces or templates (we'll keep it simple)
+    return this.inferC(code, functionName);
   }
 
   private inferPython(code: string, functionName: string) {
@@ -213,6 +253,8 @@ export class SignatureInferenceEngine {
       ruby: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       php: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       quickjs: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: true, source: 'convention' },
+      clang: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
+      clangpp: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
     };
     return conventions[language];
   }

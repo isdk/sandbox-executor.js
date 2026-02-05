@@ -75,6 +75,9 @@ npx vitest test/integration
     *   实现 `serialize`: 如何将 JS 类型转换为目标语言的字面量。
 3.  **注册生成器**: 将你的生成器添加到 `src/generators/index.ts` 中的映射中。
     *   如果 Runno 的运行时名称与你的语言名称不同（例如 `php` -> `php-cgi`），请更新 `getRuntime`。
+    *   **C/C++ 注意事项**: 当前沙盒环境中的 `clang` 和 `clangpp` 存在一些限制：
+        *   **异常**: 异常已被禁用。不要在包装代码中使用 `try-catch` 块。
+        *   **标准**: 使用兼容 C++11 的代码。避免使用 C++14/17/20 的特性，如 `if constexpr` 或类型特征变量（如 `is_same_v`）。如果需要，请使用传统的模板特化和 `std::enable_if`。
 4.  **添加推断逻辑**: 更新 `src/inference/engine.ts`。
     *   实现 `infer<Language>` 方法来解析函数签名。
     *   使用新语言的默认行为更新 `getConvention`。

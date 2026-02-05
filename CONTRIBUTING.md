@@ -75,6 +75,9 @@ To add a new language, you need to follow these steps:
     *   Implement `serialize`: How to convert JS types to the target language literals.
 3.  **Register Generator**: Add your generator to the map in `src/generators/index.ts`.
     *   If the Runno runtime name differs from your language name (e.g., `php` -> `php-cgi`), update `getRuntime`.
+    *   **Note for C/C++**: The current sandbox environment for `clang` and `clangpp` has some limitations:
+        *   **Exceptions**: Exceptions are disabled. Do not use `try-catch` blocks in the wrapper code.
+        *   **Standard**: Use C++11 compatible code. Avoid C++14/17/20 features like `if constexpr` or type trait variables (e.g., `is_same_v`). Use traditional template specialization and `std::enable_if` if needed.
 4.  **Add Inference Logic**: Update `src/inference/engine.ts`.
     *   Implement an `infer<Language>` method to parse function signatures.
     *   Update `getConvention` with default behavior for the new language.
