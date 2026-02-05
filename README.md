@@ -541,24 +541,7 @@ switch (result.status) {
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
-
-```bash
-# Clone the repo
-git clone https://github.com/isdk/sandbox-executor.js.git
-
-# Install dependencies
-pnpm install
-
-# Run tests
-pnpm test
-
-# Run tests with coverage
-pnpm test:coverage
-
-# Build
-pnpm build
-```
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) to learn about our architecture, how to add new languages, and development workflow.
 
 ## 📄 License
 
