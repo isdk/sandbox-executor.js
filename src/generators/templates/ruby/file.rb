@@ -1,4 +1,4 @@
-# === Sandbox Executor Ruby Proxy ===
+# === Sandbox Executor Ruby Proxy (File Mode) ===
 require 'json'
 
 START_MARKER = "__SANDBOX_RESULT_START__"
@@ -13,14 +13,7 @@ def execute_request(request)
 
     require_relative file_path.sub(/\.rb$/, '')
 
-    if !respond_to?(func_name, true) && !Object.respond_to?(func_name, true)
-      # Check if it's defined in Object or as a top-level method
-      # In many Ruby scripts, methods defined at top level are added to Object
-    end
-
-    # Ruby 2.7+ handles kwargs explicitly
     if kwargs && !kwargs.empty?
-      # Convert string keys to symbols for kwargs
       symbol_kwargs = kwargs.transform_keys(&:to_sym)
       result = send(func_name, *args, **symbol_kwargs)
     else
@@ -44,17 +37,29 @@ def execute_request(request)
   end
 end
 
-# Read protocol header
-mode = STDIN.read(1)
-
-if mode == 'A'
-  input_data = STDIN.read
-  if input_data && !input_data.empty?
-    request = JSON.parse(input_data)
+begin
+  request_file = '/workspace/.sandbox_request.json'
+  if File.exist?(request_file)
+    payload = File.read(request_file)
+    request = JSON.parse(payload)
     output = execute_request(request)
-
     puts START_MARKER
     puts JSON.generate(output)
     puts END_MARKER
+  else
+    raise "Request file not found: #{request_file}"
   end
+rescue => e
+  output = {
+    "success" => false,
+    "error" => {
+      "message" => "Fatal: " + e.message,
+      "type" => e.class.name,
+      "stack" => e.backtrace&.join("
+")
+    }
+  }
+  puts START_MARKER
+  puts JSON.generate(output)
+  puts END_MARKER
 end

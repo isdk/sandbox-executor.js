@@ -144,24 +144,81 @@ export interface ResultOptions {
 }
 
 /**
- * Request object for executing a function call in the sandbox.
- * @template TArgs - Type of positional arguments.
- * @template TKwargs - Type of keyword arguments.
+ * Argument passing mode.
  */
-export interface FunctionCallRequest<
-  TArgs extends unknown[] = unknown[],
-  TKwargs extends Record<string, unknown> = Record<string, unknown>
-> {
+export type ArgsMode = 'stdin' | 'inline' | 'file' | 'auto';
+
+/**
+ * Schema definition for a single parameter (JSON Schema like).
+ */
+export interface JsonSchema extends Record<string, any> {
+  type?: string;
+  description?: string;
+  default?: any;
+  required?: boolean;
+}
+
+/**
+ * Input schema can be an array of schemas for positional arguments,
+ * or an object mapping parameter names to schemas.
+ */
+export type InputSchema =
+  | JsonSchema[]
+  | Record<string, JsonSchema & { index?: number }>;
+
+/**
+ * Options for customizing the invocation and execution behavior.
+ */
+export interface InvokeOptions {
+  /**
+   * Argument passing mode.
+   * - `stdin`: Pass arguments via standard input (safe for large data).
+   * - `inline`: Embed arguments directly in the generated code (faster for small data).
+   * - `auto`: Automatically choose based on data size. Defaults to 'auto'.
+   */
+  argsMode?: ArgsMode;
+  /**
+   * Threshold in bytes for switching from 'inline' to 'stdin' in 'auto' mode.
+   * Defaults to 102400 (100KB).
+   */
+  autoModeThreshold?: number;
+  /** Execution timeout in seconds. */
+  timeout?: number;
+  /** JSON Schema for validating input arguments. */
+  inputSchema?: InputSchema;
+  /** JSON Schema for validating the function return value. */
+  outputSchema?: any;
+  /** Whether to enforce strict schema validation. */
+  strict?: boolean;
+  /** Options for the result output. */
+  resultOptions?: ResultOptions;
+}
+
+/**
+ * Argument item can be a plain value or a structured object with an index.
+ */
+export type ArgumentItem = any | { index: number; value: any };
+
+/**
+ * Request object for executing a function call in the sandbox.
+ */
+export interface FunctionCallRequest {
   /** The programming language of the code. */
   language: SupportedLanguage;
   /** The source code containing the function. */
   code: string;
   /** The name of the function to call. */
   functionName: string;
-  /** Positional arguments to pass to the function. */
-  args?: TArgs;
-  /** Keyword arguments to pass to the function. */
-  kwargs?: TKwargs;
+  /**
+   * Arguments to pass to the function.
+   * Can be an array (positional) or an object (keyword/mixed).
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
+  /**
+   * Keyword arguments to pass to the function.
+   * @deprecated Use `args` as an object instead.
+   */
+  kwargs?: Record<string, any>;
   /** Optional schema for the function. If not provided, it will be inferred. */
   schema?: FunctionSchema;
   /** Optional configuration for mounting host directories. */
@@ -170,9 +227,17 @@ export interface FunctionCallRequest<
   files?: Record<string, string | Uint8Array>;
   /** Initial working directory in the sandbox. */
   workdir?: string;
-  /** Execution timeout in seconds. */
+  /** Execution options. */
+  options?: InvokeOptions;
+  /**
+   * Execution timeout in seconds.
+   * @deprecated Use `options.timeout` instead.
+   */
   timeout?: number;
-  /** Options for the result output. */
+  /**
+   * Options for the result output.
+   * @deprecated Use `options.resultOptions` instead.
+   */
   resultOptions?: ResultOptions;
 }
 

@@ -18,9 +18,9 @@ describe('generators/index', () => {
     });
 
     it('应该返回 JavaScript 生成器', () => {
-      const generator = getGenerator('quickjs');
+      const generator = getGenerator('javascript');
       expect(generator).toBeInstanceOf(JavaScriptGenerator);
-      expect(generator.language).toBe('quickjs');
+      expect(generator.language).toBe('javascript');
     });
 
     it('应该返回 Ruby 生成器', () => {

@@ -10,6 +10,9 @@
 
 - 🌍 **多语言支持** - 执行 Python、JavaScript (QuickJS)、Ruby、PHP、C 和 C++ 代码
 - 📦 **函数级执行** - 调用指定函数并传递 args 和 kwargs，而非仅运行脚本
+- ⚡ **高性能** - 智能 `inline` 模式将参数直接嵌入代码，避开 I/O 开销
+- 🐘 **大数据支持** - 稳健的 `file` 模式绕过底层沙盒非流式 `stdin` 的缓冲区限制，支持大规模负载
+- 🤖 **自动优化** - 根据数据大小自动选择最佳传递模式 (Inline/Stdin/File)
 - 🔒 **权限控制** - 基于 glob 模式的细粒度文件系统权限控制
 - 📁 **虚拟文件系统** - 内存中的文件操作，可选同步到真实文件系统
 - 🔄 **变更追踪** - 自动检测和追踪文件变更（基于快照方案，更稳定可靠）
@@ -80,6 +83,36 @@ function calculate(a, b, options = {}) {
 });
 
 console.log(jsResult.result); // 80
+```
+
+### 灵活的参数与优化
+
+```typescript
+// 支持混合位置参数和关键字参数，并支持 index 映射
+const result = await executor.execute({
+  language: 'python',
+  code: 'def add(a, b, c=0): return a + b + c',
+  functionName: 'add',
+  args: {
+    "a": 1,
+    "b": { "index": 1, "value": 2 }, // 显式映射到索引 1
+    "c": 3
+  },
+  options: {
+    argsMode: 'auto', // 默认值：小数据自动选择 'inline'，大数据选择 'file'
+    timeout: 30,      // 自定义超时时间（秒）
+  }
+});
+
+// 处理大数据量（如 Base64 字符串）
+const largeData = 'a'.repeat(1024 * 500); // 500KB
+const result = await executor.execute({
+  language: 'python',
+  code: 'def process(data): return len(data)',
+  functionName: 'process',
+  args: [largeData],
+  // 系统会自动切换到 'file' 模式，绕过 8KB 的 stdin 限制
+});
 ```
 
 ### 使用虚拟文件
@@ -165,23 +198,45 @@ const executor = createExecutor({
 ```typescript
 interface FunctionCallRequest {
   // 必填
-  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript' | 'c' | 'cpp';
+  language: SupportedLanguage;
   code: string;
   functionName: string;
 
   // 可选
-  args?: unknown[];
-  kwargs?: Record<string, unknown>;
+  /**
+   * 数组用于位置参数，对象用于关键字或混合参数。
+   * 支持: { "paramName": { "index": number, "value": any } }
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
+
+  /** @deprecated 请直接将 args 设为对象 */
+  kwargs?: Record<string, any>;
+
+  options?: InvokeOptions;
+
   schema?: FunctionSchema;
   mount?: MountConfig;
   files?: Record<string, string | Uint8Array>;
   workdir?: string;
-  timeout?: number; // 运行超时时间（秒）
-  resultOptions?: {
-    includeChanges?: boolean;
-    includeContents?: boolean;
-    includeDenied?: boolean;
-  };
+}
+
+interface InvokeOptions {
+  /**
+   * 'inline': 硬编码在源码中 (最快)
+   * 'stdin': 标准 SIP 协议
+   * 'file': 通过虚拟 JSON 文件 (大数据最稳健)
+   * 'auto': 自动选择 (默认)
+   */
+  argsMode?: 'inline' | 'stdin' | 'file' | 'auto';
+
+  /** 超时时间（秒） */
+  timeout?: number;
+
+  /** 用于输入/输出校验的 JSON Schema */
+  inputSchema?: InputSchema;
+  outputSchema?: any;
+
+  resultOptions?: ResultOptions;
 }
 ```
 
@@ -542,7 +597,9 @@ switch (result.status) {
 
 ## ⚠️ 技术限制
 
-* **参数大小限制**: 由于底层 WASM 运行时的限制，通过 `stdin` 传递的参数（`args` 和 `kwargs` 序列化后的 JSON）当前建议不要超过 **8KB (8188 字节)**。如果需要传递更大数据，建议通过 `files` 参数创建虚拟文件。
+- **Stdin 实现限制**: 底层依赖的 `@runno/sandbox` (具体为 `runFS`) 目前采用**非流式、带缓冲**的 `stdin` 实现。这导致单次输入被物理限制在 **8188 字节 (8KB)** 以内。
+- **PHP 环境限制**: 对于 PHP，沙盒目前仅提供 `php-cgi` 运行时而非标准 CLI。因此，PHP 在此环境下不支持标准的 `stdin` 流输入。
+- **解决方案**: 推荐使用 `file` 模式（基于虚拟文件系统）来可靠地处理大数据负载或执行 PHP 代码。
 
 ## 🤝 贡献
 

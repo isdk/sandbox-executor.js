@@ -15,8 +15,8 @@ describe('JavaScriptGenerator', () => {
   };
 
   describe('基本属性', () => {
-    it('language 应该是 quickjs', () => {
-      expect(generator.language).toBe('quickjs');
+    it('language 应该是 javascript', () => {
+      expect(generator.language).toBe('javascript');
     });
 
     it('fileExtension 应该是 .js', () => {

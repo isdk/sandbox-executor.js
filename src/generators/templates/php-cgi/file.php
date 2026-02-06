@@ -1,5 +1,5 @@
 <?php
-// === Sandbox Executor PHP Proxy ===
+// === Sandbox Executor PHP Proxy (File Mode) ===
 
 const START_MARKER = "__SANDBOX_RESULT_START__";
 const END_MARKER = "__SANDBOX_RESULT_END__";
@@ -18,15 +18,14 @@ function execute_request($request) {
         $args = $request['args'] ?? [];
         $kwargs = $request['kwargs'] ?? [];
 
-        require_once $filePath;
+        if (file_exists($filePath)) {
+            require_once $filePath;
+        }
 
         if (!function_exists($funcName)) {
             throw new Exception("Function '$funcName' not found.");
         }
 
-        // PHP handles kwargs via associative arrays if the function is designed for it,
-        // or we can use reflection to map kwargs to positional params.
-        // For simplicity, we just pass args and if kwargs exists, append it.
         if (!empty($kwargs)) {
             $result = call_user_func_array($funcName, array_merge($args, [$kwargs]));
         } else {
@@ -37,7 +36,7 @@ function execute_request($request) {
             "success" => true,
             "result" => __sandbox_serialize($result)
         ];
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         return [
             "success" => false,
             "error" => [
@@ -49,17 +48,10 @@ function execute_request($request) {
     }
 }
 
-// Read protocol header from php://input (standard for CGI)
-$input = file_get_contents('php://input');
-if (!$input) {
-    exit;
-}
-
-$mode = $input[0];
-$data = substr($input, 1);
-
-if ($mode === 'A') {
-    $request = json_decode($data, true);
+$requestFile = '/workspace/.sandbox_request.json';
+if (file_exists($requestFile)) {
+    $payload = file_get_contents($requestFile);
+    $request = json_decode($payload, true);
     $output = execute_request($request);
 
     echo START_MARKER . "
@@ -68,4 +60,6 @@ if ($mode === 'A') {
 ";
     echo END_MARKER . "
 ";
+} else {
+    error_log("Request file not found: $requestFile");
 }

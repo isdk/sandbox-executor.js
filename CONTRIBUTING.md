@@ -15,24 +15,73 @@ Sandbox Executor is designed to provide a high-level, function-centric API on to
   * **Subsequent Bytes**: JSON call request (containing `functionName`, `args`, `kwargs`, etc.).
 * **Proxy/User-Code Separation**: Each language has a `main` proxy program responsible for handling the SIP protocol and dynamically loading the `user_code` file containing the user logic.
 
-### Technical Limitations & Future Roadmap
+### 🏗️ Argument Passing Mechanisms
 
-* **Stdin Buffer Limit**: The current underlying `runFS` implementation has a limit of **8188 bytes (8KB)** for a single `stdin` input.
-* **Streaming Stdin**: Refactoring `runFS` to support a streaming `stdin` API (e.g., via `ReadableStream`) is planned.
+To balance performance, reliability, and data volume, Sandbox Executor supports three distinct argument passing modes. The `auto` mode (default) intelligently chooses the best strategy.
 
-### PHP-CGI Solution: Pseudo-Stdin
+#### 1. `inline` Mode (Fastest)
 
-The `php-cgi` runtime in certain WASM environments (like `@runno/sandbox`) has several limitations regarding standard input:
+* **Mechanism**: Arguments are serialized into target language literals and hardcoded directly into the generated `main` proxy source code.
+* **Pros**: Zero runtime overhead for communication; bypasses all `stdin` limitations.
+* **Cons**: Source code size increases; risk of code injection if not properly escaped.
+* **Best for**: Small data, simple function calls (e.g., less than 4KB).
 
-1. **Unreliable Stream Access**: `php://stdin` and `php://input` may fail to read the `stdin` string passed via `runFS` in some runtimes.
-2. **CGI Protocol Conflicts**: `php-cgi` often expects inputs adhering to the CGI protocol, causing simple raw string writes to be ignored.
+#### 2. `stdin` Mode (Standard)
 
-**Solution:**
-The PHP generator employs a "Pseudo-Stdin" strategy. When generating the `main.php` proxy, the executor Base64-encodes the SIP protocol packet and embeds it directly into the code template as a constant string.
+* **Mechanism**: Arguments are passed via the standard input stream using the **SIP (Sandbox Input Protocol)** (Length-prefixed JSON).
+* **Pros**: Decouples data from source code; standard WASI communication.
+* **Cons**: Limited by the underlying sandbox's **non-streaming** implementation of `stdin` (currently **8KB** buffered in `runFS`). Large data will cause timeouts or truncation.
+* **Best for**: Moderate data volumes (4KB to 8KB).
 
-* **Generation**: `encodedData = base64_encode(SIP_Packet)` -> replaces `{{STDIN_DATA}}` in the template.
-* **Execution**: The proxy program calls `base64_decode` to retrieve the input instead of attempting to read from the actual `stdin` stream.
-This ensures compatibility while maintaining a consistent internal logic with other language proxies.
+#### 3. `file` Mode (Most Robust)
+
+* **Mechanism**: Arguments are written to a temporary virtual JSON file (e.g., `/workspace/.sandbox_request.json`) within the sandbox VFS. The proxy program reads this file at startup.
+* **Pros**: Bypasses all `stdin` buffer limits; extremely reliable for very large data (e.g., Base64 strings).
+* **Best for**: Large data (> 8KB) or environments with unstable `stdin`.
+
+### 🧠 `auto` Selection Logic
+
+The `SandboxExecutor` evaluates the total size of arguments and chooses:
+
+* **Size < 4KB**: Use `inline` if the language supports it.
+* **4KB <= Size < 8KB**: Use `stdin`.
+* **Size >= 8KB**: Use `file`.
+
+---
+
+### ⚠️ Pitfalls & Lessons Learned
+
+During the industrialization of the parameter passing mechanism, several critical issues were resolved:
+
+#### 1. The 8KB Stdin Wall
+
+The `runno` `runFS` implementation has a fixed buffer for `stdin`. Sending more than 8188 bytes results in an immediate hang or silent failure.
+
+* **Fix**: The introduction of `file` mode (VFS-based) completely resolved this for all languages.
+
+#### 2. Python "Multiple Values for Argument"
+
+When mixing positional `args` and keyword `kwargs` (e.g., `func(*[None, 2], **{'a': 1})`), Python throws a `TypeError` if `a` is the first parameter.
+
+* **Fix**: Implemented **Hole-filling logic** in `normalizeArguments`. If the `args` array has gaps, the executor uses the function signature to pull matching keys from `kwargs` into those gaps before passing them to the sandbox.
+
+#### 3. C++ Strictness
+
+* **Memory Allocation**: In C++, `malloc` returns `void*` and requires an explicit cast (e.g., `(char*)malloc(...)`). Shared C templates must include these casts to be valid C++.
+* **Type Overloading**: C++ functions returning `std::string` cannot be directly passed to `cJSON_CreateString(const char*)`.
+* **Fix**: Injected a C++ helper/overload into the dispatcher to handle `std::string` transparently.
+
+#### 4. Absolute Path Consistency
+
+Relative paths in the sandbox (like `./file.json`) can be ambiguous depending on the entry point.
+
+* **Fix**: Always use absolute paths (e.g., `/workspace/.sandbox_request.json`) and pass them to proxies via environment variables or `#define` macros.
+
+#### 5. String Escaping in C Templates
+
+When generating C code from JavaScript strings, `\n` and `\0` can be double-processed.
+
+* **Fix**: Use raw strings or carefully controlled escaping in templates. Ensure the `cJSON` printer uses a large enough dynamic buffer (8KB+) to prevent memory corruption when serializing complex results.
 
 ### Core Components
 

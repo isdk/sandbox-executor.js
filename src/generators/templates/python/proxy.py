@@ -1,5 +1,5 @@
-# === Sandbox Executor Python Proxy ===
-import sys, json, traceback, importlib.util, types
+# === Sandbox Executor Python Proxy (Stdin Mode) ===
+import sys, json, traceback, importlib.util
 
 # Result markers
 START_MARKER = "__SANDBOX_RESULT_START__"
@@ -53,34 +53,38 @@ def execute_request(request):
         }
 
 def main():
-    # Read protocol header
-    mode = sys.stdin.read(1)
-    
-    if mode == 'A': # Atomic mode
-        input_data = sys.stdin.read()
-        if not input_data:
+    try:
+        # Read protocol header: [Mode(1b)][Length(4b)]
+        header = sys.stdin.buffer.read(5)
+        if len(header) < 5:
             return
-        request = json.loads(input_data)
-        output = execute_request(request)
         
-        print(START_MARKER)
-        print(json.dumps(output, ensure_ascii=False))
-        print(END_MARKER)
+        mode = chr(header[0])
+        length = int.from_bytes(header[1:5], 'big')
         
-    elif mode == 'P': # Persistent mode (future)
-        while True:
-            header = sys.stdin.read(4)
-            if not header:
-                break
-            length = int.from_bytes(header.encode('latin-1'), 'big')
-            input_data = sys.stdin.read(length)
-            request = json.loads(input_data)
+        if mode == 'A': # Atomic mode
+            payload = sys.stdin.buffer.read(length)
+            if not payload:
+                raise ValueError("Empty payload")
+            request = json.loads(payload.decode('utf-8'))
             output = execute_request(request)
             
             print(START_MARKER)
             print(json.dumps(output, ensure_ascii=False))
             print(END_MARKER)
             sys.stdout.flush()
+    except Exception as e:
+        output = {
+            "success": False,
+            "error": {
+                "message": "Fatal: " + str(e),
+                "type": type(e).__name__,
+                "stack": traceback.format_exc()
+            }
+        }
+        print(START_MARKER)
+        print(json.dumps(output, ensure_ascii=False))
+        print(END_MARKER)
 
 if __name__ == "__main__":
     main()

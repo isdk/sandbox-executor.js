@@ -50,6 +50,7 @@ describe('SandboxExecutor', () => {
         code: 'def add(a, b): return a + b',
         functionName: 'add',
         args: [1, 2],
+        options: { argsMode: 'stdin' },
       });
 
       expect(mockRunFS).toHaveBeenCalled();
@@ -70,6 +71,7 @@ describe('SandboxExecutor', () => {
         functionName: 'greet',
         args: ['World'],
         kwargs: { greeting: 'Hi' },
+        options: { argsMode: 'stdin' },
       });
 
       const [, , , options] = mockRunFS.mock.calls[0];

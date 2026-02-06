@@ -15,8 +15,8 @@ describe('PHPCgiGenerator', () => {
   };
 
   describe('基本属性', () => {
-    it('language 应该是 php', () => {
-      expect(generator.language).toBe('php');
+    it('language 应该是 php-cgi', () => {
+      expect(generator.language).toBe('php-cgi');
     });
 
     it('fileExtension 应该是 .php', () => {

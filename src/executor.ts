@@ -13,6 +13,8 @@ import type {
   SyncEventConfig,
   PermissionDeniedRecord,
   AfterSyncEventData,
+  ArgsMode,
+  InvokeOptions,
 } from './types';
 
 import { PermissionResolver } from './fs/permission-resolver';
@@ -109,11 +111,12 @@ export class SandboxExecutor extends EventEmitter {
    *
    * This method follows these steps:
    * 1. Resolve function signature (via schema or inference).
-   * 2. Generate execution wrapper code.
-   * 3. Build the virtual file system (including mounts and virtual files).
-   * 4. Run the code in the WASM sandbox.
-   * 5. Track file changes and handle synchronization.
-   * 6. Parse and return the function result.
+   * 2. Normalize arguments and determine argument passing mode.
+   * 3. Generate execution wrapper code.
+   * 4. Build the virtual file system (including mounts and virtual files).
+   * 5. Run the code in the WASM sandbox.
+   * 6. Track file changes and handle synchronization.
+   * 7. Parse and return the function result.
    *
    * @template T - The expected return type of the function.
    * @param request - The execution request details.
@@ -133,22 +136,31 @@ export class SandboxExecutor extends EventEmitter {
         request.schema
       );
 
-      // 2. 生成执行代码
+      // 2. 规范化参数和选项
+      const options = this.normalizeOptions(request);
+      const { args, kwargs } = this.normalizeArguments(request, signature);
+
+      // 3. 确定参数传递模式 (auto 模式逻辑)
       const generator = getGenerator(request.language);
+      options.argsMode = this.resolveArgsMode(generator, args, kwargs, options);
+
+      // 4. 生成执行代码
       const executionFiles = generator.generateFiles(
         request.code,
         request.functionName,
-        request.args ?? [],
-        request.kwargs ?? {},
-        signature
+        args,
+        kwargs,
+        signature,
+        options
       );
       const stdin = generator.generateStdin(
         request.functionName,
-        request.args ?? [],
-        request.kwargs ?? {}
+        args,
+        kwargs,
+        options
       );
 
-      // 3. 构建文件系统
+      // 5. 构建文件系统
       const { fs, snapshot, differ } = await this.buildFileSystem(
         executionFiles,
         workdir,
@@ -156,23 +168,23 @@ export class SandboxExecutor extends EventEmitter {
         request.mount
       );
 
-      // 4. 执行代码
+      // 6. 执行代码
       const entryPath = `${workdir}/main${generator.fileExtension}`;
       const runtime = getRuntime(request.language);
       const runResult = await runFS(runtime as any, entryPath, fs, {
         stdin: stdin as any,
-        timeout: request.timeout ? request.timeout * 1000 : undefined,
+        timeout: options.timeout ? options.timeout * 1000 : undefined,
       }) as RunResult;
 
-      // 5. 检查执行结果类型
+      // 7. 检查执行结果类型
       if (runResult.resultType !== 'complete') {
         return this.handleNonCompleteResult<T>(runResult, startTime, signature.source);
       }
 
-      // 6. 执行成功，继续处理
+      // 8. 执行成功，继续处理
       const completeResult = runResult as RunResultComplete;
 
-      // 7. 检测文件变更
+      // 9. 检测文件变更
       const changes = differ
         ? differ.diff(snapshot!, completeResult.fs)
         : {
@@ -182,7 +194,7 @@ export class SandboxExecutor extends EventEmitter {
             denied: [],
           };
 
-      // 8. 处理同步（仅当有挂载且配置为 batch 模式）
+      // 10. 处理同步（仅当有挂载且配置为 batch 模式）
       let syncResult: SyncResult | undefined;
       if (hasMount && request.mount!.sync?.mode === 'batch') {
         syncResult = await this.performSync(
@@ -191,10 +203,10 @@ export class SandboxExecutor extends EventEmitter {
         );
       }
 
-      // 9. 解析函数返回值
+      // 11. 解析函数返回值
       const parsed = this.parseOutput<T>(completeResult.stdout);
 
-      // 10. 返回结果
+      // 12. 返回结果
       return {
         status: parsed.success ? 'success' : 'error',
         success: parsed.success,
@@ -203,7 +215,7 @@ export class SandboxExecutor extends EventEmitter {
         stdout: completeResult.stdout,
         stderr: completeResult.stderr,
         exitCode: completeResult.exitCode,
-        files: request.resultOptions?.includeChanges !== false
+        files: options.resultOptions?.includeChanges !== false
           ? this.buildChangeSummary(changes, syncResult)
           : undefined,
         meta: {
@@ -231,6 +243,121 @@ export class SandboxExecutor extends EventEmitter {
           signatureSource: 'convention',
         },
       };
+    }
+  }
+
+  /**
+   * 规范化选项，合并弃用字段
+   */
+  private normalizeOptions(request: FunctionCallRequest): InvokeOptions {
+    const options = { ...request.options };
+    options.timeout = options.timeout ?? request.timeout;
+    options.resultOptions = options.resultOptions ?? request.resultOptions;
+    options.argsMode = options.argsMode ?? 'auto';
+    options.autoModeThreshold = options.autoModeThreshold ?? 102400; // 100KB
+    return options;
+  }
+
+  /**
+   * 规范化参数，支持混合格式和旧版 kwargs
+   */
+  private normalizeArguments(
+    request: FunctionCallRequest,
+    signature?: any
+  ): { args: any[]; kwargs: Record<string, any> } {
+    let args: any[] = [];
+    let kwargs: Record<string, any> = { ...request.kwargs };
+
+    if (Array.isArray(request.args)) {
+      request.args.forEach((item, idx) => {
+        if (item && typeof item === 'object' && 'index' in item && 'value' in item) {
+          args[item.index] = item.value;
+        } else {
+          args[idx] = item;
+        }
+      });
+    } else if (request.args && typeof request.args === 'object') {
+      for (const [key, item] of Object.entries(request.args)) {
+        if (item && typeof item === 'object' && 'index' in item && 'value' in item) {
+          args[item.index] = item.value;
+        } else {
+          kwargs[key] = item;
+        }
+      }
+    }
+
+    // 智能填补 args 中的孔洞
+    // 如果 args[0] 是空的，但 kwargs['a'] 有值，且根据签名 'a' 就在 index 0，则移动它
+    if (signature && signature.params) {
+      const maxIdx = args.length;
+      for (let i = 0; i < maxIdx; i++) {
+        if (args[i] === undefined) {
+          const paramSchema = signature.params[i];
+          if (paramSchema && paramSchema.name in kwargs) {
+            args[i] = kwargs[paramSchema.name];
+            delete kwargs[paramSchema.name];
+          }
+        }
+      }
+    }
+
+    // 转换为真正的数组（处理稀疏数组）
+    args = Array.from(args);
+
+    return { args, kwargs };
+  }
+
+  /**
+   * 决定最终的参数传递模式
+   */
+  private resolveArgsMode(
+    generator: any,
+    args: any[],
+    kwargs: Record<string, any>,
+    options: InvokeOptions
+  ): ArgsMode {
+    const supported = generator.supportedArgsModes();
+    const mode = options.argsMode || 'auto';
+    
+    if (mode === 'inline' && supported.includes('inline')) return 'inline';
+    if (mode === 'file' && supported.includes('file')) return 'file';
+    if (mode === 'stdin' && supported.includes('stdin')) return 'stdin';
+    
+    if (mode === 'auto') {
+      const size = this.calculateDataSize(args) + this.calculateDataSize(kwargs);
+      
+      // 1. Very small data -> inline (fastest)
+      if (size < 4096 && supported.includes('inline')) {
+        return 'inline';
+      }
+      
+      // 2. Medium data -> stdin (standard)
+      // Note: We use 8192 as a typical buffer limit for stdin in some WASM runtimes
+      if (size < 8192 && supported.includes('stdin')) {
+        return 'stdin';
+      }
+      
+      // 3. Large data -> file (safe and robust via VFS)
+      if (supported.includes('file')) {
+        return 'file';
+      }
+      
+      // Fallback to whatever is supported
+      if (supported.includes('stdin')) return 'stdin';
+      if (supported.includes('inline')) return 'inline';
+    }
+    
+    return 'stdin';
+  }
+
+  /**
+   * 估算数据大小（用于 auto 模式阈值判断）
+   */
+  private calculateDataSize(data: any): number {
+    try {
+      return JSON.stringify(data).length;
+    } catch {
+      return 1024; // 序列化失败时保守估计
     }
   }
 

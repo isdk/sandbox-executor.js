@@ -10,6 +10,9 @@ A powerful, type-safe library for executing functions in isolated sandbox enviro
 
 - 🌍 **Multi-Language Support** - Execute Python, JavaScript (QuickJS), Ruby, PHP, C and C++ code
 - 📦 **Function-Level Execution** - Call specific functions with args and kwargs, not just run scripts
+- ⚡ **High Performance** - Smart `inline` mode embeds arguments directly into code to bypass I/O overhead
+- 🐘 **Large Data Support** - Robust `file` mode bypasses non-streaming `stdin` implementation limits of the underlying sandbox for massive payloads
+- 🤖 **Auto Optimization** - Automatically chooses the best passing mode (Inline/Stdin/File) based on data size
 - 🔒 **Permission Control** - Fine-grained file system permissions with glob patterns
 - 📁 **Virtual File System** - In-memory file operations with optional real filesystem sync
 - 🔄 **Change Tracking** - Automatic detection and tracking of file changes (Snapshot-based for robustness)
@@ -80,6 +83,36 @@ function calculate(a, b, options = {}) {
 });
 
 console.log(jsResult.result); // 80
+```
+
+### Flexible Arguments & Optimization
+
+```typescript
+// Support for mixed positional and keyword arguments with index mapping
+const result = await executor.execute({
+  language: 'python',
+  code: 'def add(a, b, c=0): return a + b + c',
+  functionName: 'add',
+  args: {
+    "a": 1,
+    "b": { "index": 1, "value": 2 }, // Explicitly map to index 1
+    "c": 3
+  },
+  options: {
+    argsMode: 'auto', // Default: chooses 'inline' for small data, 'file' for large
+    timeout: 30,      // Custom timeout in seconds
+  }
+});
+
+// Handling large data (e.g., Base64 strings)
+const largeData = 'a'.repeat(1024 * 500); // 500KB
+const result = await executor.execute({
+  language: 'python',
+  code: 'def process(data): return len(data)',
+  functionName: 'process',
+  args: [largeData],
+  // System will automatically switch to 'file' mode to bypass 8KB stdin limit
+});
 ```
 
 ### With Virtual Files
@@ -170,18 +203,40 @@ interface FunctionCallRequest {
   functionName: string;
 
   // Optional
-  args?: unknown[];
-  kwargs?: Record<string, unknown>;
+  /**
+   * Array for positional, Object for keyword/mixed.
+   * Supports: { "paramName": { "index": number, "value": any } }
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
+
+  /** @deprecated Use args as an object instead */
+  kwargs?: Record<string, any>;
+
+  options?: InvokeOptions;
+
   schema?: FunctionSchema;
   mount?: MountConfig;
   files?: Record<string, string | Uint8Array>;
   workdir?: string;
-  timeout?: number; // Execution timeout in seconds
-  resultOptions?: {
-    includeChanges?: boolean;
-    includeContents?: boolean;
-    includeDenied?: boolean;
-  };
+}
+
+interface InvokeOptions {
+  /**
+   * 'inline': hardcoded in source (fastest)
+   * 'stdin': standard SIP protocol
+   * 'file': via virtual JSON file (most robust for large data)
+   * 'auto': automatic selection (default)
+   */
+  argsMode?: 'inline' | 'stdin' | 'file' | 'auto';
+
+  /** Timeout in seconds */
+  timeout?: number;
+
+  /** JSON Schema for input/output validation */
+  inputSchema?: InputSchema;
+  outputSchema?: any;
+
+  resultOptions?: ResultOptions;
 }
 ```
 
@@ -542,7 +597,9 @@ switch (result.status) {
 
 ## ⚠️ Technical Limitations
 
-* **Argument Size Limit**: Due to the underlying WASM runtime constraints, the serialized parameters (`args` and `kwargs` as JSON) passed via `stdin` are currently limited to **8KB (8188 bytes)**. For larger data, please use the `files` parameter to provide virtual files.
+- **Stdin Implementation**: The underlying `@runno/sandbox` (specifically `runFS`) currently uses a **buffered, non-streaming** `stdin` implementation. This imposes a physical limit of **8188 bytes (8KB)** for single-shot input.
+- **PHP Environment**: For PHP, the sandbox provides a `php-cgi` environment rather than a standard CLI. Consequently, standard `stdin` streams are not supported for this language.
+- **Workaround**: The `file` mode (VFS-based) is the recommended robust solution for large data payloads and for PHP execution.
 
 ## 🤝 Contributing
 

@@ -1,5 +1,5 @@
 import type { InferredSignature } from '../inference/engine';
-import { InputProtocol } from '../types/request';
+import { InputProtocol, type ArgsMode, type InvokeOptions } from '../types/request';
 
 export const RESULT_MARKERS = {
   START: '__SANDBOX_RESULT_START__',
@@ -11,6 +11,13 @@ export abstract class CodeGenerator {
   abstract readonly fileExtension: string;
 
   /**
+   * Returns the supported argument passing modes for this language.
+   */
+  supportedArgsModes(): ArgsMode[] {
+    return ['stdin']; // Default to stdin only
+  }
+
+  /**
    * Generates all files needed for execution in the sandbox.
    *
    * @param userCode - The original user source code.
@@ -18,22 +25,17 @@ export abstract class CodeGenerator {
    * @param args - Positional arguments.
    * @param kwargs - Keyword arguments.
    * @param signature - The inferred function signature.
+   * @param options - Execution options including argsMode.
    * @returns A map of filename to content.
    */
-  generateFiles(
+  abstract generateFiles(
     userCode: string,
     functionName: string,
     args: unknown[],
     kwargs: Record<string, unknown>,
-    signature: InferredSignature
-  ): Record<string, string | Uint8Array> {
-    // Default implementation for backward compatibility
-    // Newer generators should override this to provide a separate proxy and user_code
-    const wrapper = this.generateWrapper(functionName, args, kwargs, signature);
-    return {
-      [`main${this.fileExtension}`]: `${userCode}\n\n${wrapper}`
-    };
-  }
+    signature: InferredSignature,
+    options?: InvokeOptions
+  ): Record<string, string | Uint8Array>;
 
   /**
    * Generates the stdin content for the sandbox.
@@ -41,21 +43,21 @@ export abstract class CodeGenerator {
    * @param functionName - The name of the function to call.
    * @param args - Positional arguments.
    * @param kwargs - Keyword arguments.
+   * @param options - Execution options.
    * @returns The stdin content as a Uint8Array or string.
    */
   generateStdin(
     functionName: string,
     args: unknown[],
-    kwargs: Record<string, unknown>
+    kwargs: Record<string, unknown>,
+    options?: InvokeOptions
   ): string | Uint8Array {
-    // Default is empty for backward compatibility
     return '';
   }
 
   /**
    * Helper to build atomic mode stdin content with length prefix.
    * Format: [Mode(1b)][Length(4b)][JSON]
-   * Returns a "binary string" where each character's charCode is a byte.
    */
   protected buildAtomicStdin(data: object): string {
     const jsonStr = JSON.stringify(data);
@@ -70,32 +72,41 @@ export abstract class CodeGenerator {
     res += String.fromCharCode(len & 0xff);
     
     // Convert JSON bytes to string. 
-    // Since it's UTF-8, we can decode it back to string.
     res += new TextDecoder().decode(jsonBytes);
     
     return res;
   }
 
   /**
-   * @deprecated Use generateFiles instead.
+   * Helper to load a template file.
    */
-  generateExecutionCode(
-    userCode: string,
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    signature: InferredSignature
-  ): string {
-    const files = this.generateFiles(userCode, functionName, args, kwargs, signature);
-    return files[`main${this.fileExtension}`] as string;
+  protected getTemplate(name: string, ext?: string): string {
+    const extension = ext ?? this.fileExtension;
+    try {
+      // @ts-ignore
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const fs = require('fs');
+        const path = require('path');
+        const possiblePaths = [
+          path.join(__dirname, 'templates', this.language, `${name}${extension}`),
+          path.join(__dirname, 'templates', 'common', `${name}${extension}`),
+          path.join(process.cwd(), 'src/generators/templates', this.language, `${name}${extension}`),
+          path.join(process.cwd(), 'src/generators/templates', 'common', `${name}${extension}`),
+          path.join(process.cwd(), 'packages/sandbox-executor/src/generators/templates', this.language, `${name}${extension}`),
+          path.join(process.cwd(), 'packages/sandbox-executor/src/generators/templates', 'common', `${name}${extension}`),
+        ];
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) {
+            // console.log(`DEBUG: Loading template from ${p}`);
+            return fs.readFileSync(p, 'utf8');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to load template ${name}${extension} for ${this.language}:`, e);
+    }
+    throw new Error(`Template ${name}${extension} not found for ${this.language}`);
   }
-
-  protected abstract generateWrapper(
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    signature: InferredSignature
-  ): string;
 
   protected abstract serialize(value: unknown): string;
 }
