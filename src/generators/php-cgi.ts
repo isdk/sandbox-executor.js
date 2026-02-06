@@ -84,7 +84,7 @@ if ($mode === 'A') {
 }
 `;
 
-export class PHPGenerator extends CodeGenerator {
+export class PHPCgiGenerator extends CodeGenerator {
   readonly language = 'php';
   readonly fileExtension = '.php';
 

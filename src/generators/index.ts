@@ -3,7 +3,7 @@ import { CodeGenerator } from './base';
 import { PythonGenerator } from './python';
 import { JavaScriptGenerator } from './javascript';
 import { RubyGenerator } from './ruby';
-import { PHPGenerator } from './php';
+import { PHPCgiGenerator } from './php-cgi';
 import { CGenerator } from './c';
 import { CppGenerator } from './cpp';
 
@@ -12,7 +12,7 @@ const generators = new Map<string, CodeGenerator>([
   ['python', new PythonGenerator()],
   ['quickjs', jsGenerator],
   ['ruby', new RubyGenerator()],
-  ['php', new PHPGenerator()],
+  ['php', new PHPCgiGenerator()],
   ['clang', new CGenerator()],
   ['clangpp', new CppGenerator()],
 ]);
@@ -53,6 +53,6 @@ export { CodeGenerator, RESULT_MARKERS } from './base';
 export { PythonGenerator } from './python';
 export { JavaScriptGenerator } from './javascript';
 export { RubyGenerator } from './ruby';
-export { PHPGenerator } from './php';
+export { PHPCgiGenerator } from './php-cgi';
 export { CGenerator } from './c';
 export { CppGenerator } from './cpp';

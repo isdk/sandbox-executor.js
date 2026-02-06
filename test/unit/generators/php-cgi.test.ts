@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { PHPGenerator } from '../../../src/generators';
+import { PHPCgiGenerator } from '../../../src/generators';
 import { InputProtocol } from '../../../src/types/request';
 import type { InferredSignature } from '../../../src/inference/engine';
 
-describe('PHPGenerator', () => {
-  const generator = new PHPGenerator();
+describe('PHPCgiGenerator', () => {
+  const generator = new PHPCgiGenerator();
 
   const defaultSignature: InferredSignature = {
     params: [],
@@ -38,7 +38,7 @@ describe('PHPGenerator', () => {
       expect(files['main.php']).toBeDefined();
       expect(files['user_code.php']).toContain('<?php');
       expect(files['user_code.php']).toContain(userCode);
-      
+
       const proxyCode = files['main.php'] as string;
       expect(proxyCode).toContain('<?php');
       expect(proxyCode).toContain('function execute_request($request)');
@@ -63,7 +63,7 @@ describe('PHPGenerator', () => {
       const functionName = 'func';
       const args = [1, 'test'];
       const kwargs = { key: 'val' };
-      
+
       const stdin = generator.generateStdin(functionName, args, kwargs);
       expect(stdin).toBe('');
     });
