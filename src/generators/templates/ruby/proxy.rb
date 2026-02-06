@@ -39,10 +39,10 @@ def execute_request(request)
 end
 
 begin
-  header = STDIN.read(5)
-  if header && header.length == 5
+  header = STDIN.read(9)
+  if header && header.length == 9
     mode = header[0]
-    length = header[1..4].unpack1('N') # Big-endian 32-bit unsigned
+    length = header[1..8].to_i(16)
 
     if mode == 'A'
       payload = STDIN.read(length)

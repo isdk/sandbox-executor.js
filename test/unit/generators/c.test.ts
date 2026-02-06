@@ -45,7 +45,7 @@ describe('CGenerator', () => {
     it('应该生成正确的 Stdin', () => {
       const stdin = generator.generateStdin('add', [1, 2], {}) as string;
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
-      const request = JSON.parse(stdin.substring(5));
+      const request = JSON.parse(stdin.substring(9));
       expect(request.functionName).toBe('add');
       expect(request.args).toEqual([1, 2]);
     });

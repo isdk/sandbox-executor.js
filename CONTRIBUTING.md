@@ -11,8 +11,9 @@ Sandbox Executor is designed to provide a high-level, function-centric API on to
 * **Standard I/O as Communication Bridge**: Use `stdin` for function input within the sandbox and `stdout` for function output. This design allows the executor to support any programming language and facilitates easier replacement or iteration of the underlying sandbox library.
 * **SIP (Sandbox Input Protocol)**: To ensure robustness and future extensibility, input uses a length-prefix protocol:
   * **1st Byte**: Mode (`'A'` for Atomic, `'P'` for Persistent).
-  * **Bytes 2-5**: 4-byte big-endian integer representing the length of the JSON payload.
+  * **Bytes 2-9**: 8-character hex-encoded string representing the length of the JSON payload.
   * **Subsequent Bytes**: JSON call request (containing `functionName`, `args`, `kwargs`, etc.).
+  * **Note**: We use hex-encoded length because the underlying `runFS` `stdin` only supports strings. Binary length bytes could be corrupted or change size during UTF-8 encoding. Hex ensures ASCII safety.
 * **Proxy/User-Code Separation**: Each language has a `main` proxy program responsible for handling the SIP protocol and dynamically loading the `user_code` file containing the user logic.
 
 ### 🏗️ Argument Passing Mechanisms

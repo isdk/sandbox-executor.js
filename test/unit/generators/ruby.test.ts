@@ -37,7 +37,7 @@ describe('RubyGenerator', () => {
 
       expect(files['main.rb']).toBeDefined();
       expect(files['user_code.rb']).toBe(userCode);
-      
+
       const proxyCode = files['main.rb'] as string;
       expect(proxyCode).toContain("require 'json'");
       expect(proxyCode).toContain('def execute_request(request)');
@@ -50,15 +50,15 @@ describe('RubyGenerator', () => {
       const functionName = 'greet';
       const args = ['World'];
       const kwargs = { greeting: 'Hi' };
-      
+
       const stdin = generator.generateStdin(functionName, args, kwargs) as string;
-      
+
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
-      
+
       // Skip 5 bytes header
-      const jsonStr = stdin.substring(5);
+      const jsonStr = stdin.substring(9);
       const request = JSON.parse(jsonStr);
-      
+
       expect(request.functionName).toBe(functionName);
       expect(request.args).toEqual(args);
       expect(request.kwargs).toEqual(kwargs);

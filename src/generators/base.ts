@@ -57,24 +57,17 @@ export abstract class CodeGenerator {
 
   /**
    * Helper to build atomic mode stdin content with length prefix.
-   * Format: [Mode(1b)][Length(4b)][JSON]
+   * Format: [Mode(1b)][Length(8b hex)][JSON]
    */
   protected buildAtomicStdin(data: object): string {
     const jsonStr = JSON.stringify(data);
     const jsonBytes = new TextEncoder().encode(jsonStr);
     const len = jsonBytes.length;
     
-    let res = InputProtocol.ATOMIC;
-    // Big-endian length encoded as characters
-    res += String.fromCharCode((len >> 24) & 0xff);
-    res += String.fromCharCode((len >> 16) & 0xff);
-    res += String.fromCharCode((len >> 8) & 0xff);
-    res += String.fromCharCode(len & 0xff);
+    // Use 8-character hex for length to be safe with UTF-8 encoding in runFS
+    const lenHex = len.toString(16).padStart(8, '0');
     
-    // Convert JSON bytes to string. 
-    res += new TextDecoder().decode(jsonBytes);
-    
-    return res;
+    return InputProtocol.ATOMIC + lenHex + jsonStr;
   }
 
   /**

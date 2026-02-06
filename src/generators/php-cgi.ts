@@ -56,8 +56,8 @@ export class PHPCgiGenerator extends CodeGenerator {
         filePath: `/workspace/user_code${this.fileExtension}`
       });
 
-      // Convert binary string to base64 for pseudo-stdin
-      const encodedStdin = Buffer.from(stdinData, 'binary').toString('base64');
+      // Convert string to base64 for pseudo-stdin using utf8 to preserve Unicode
+      const encodedStdin = Buffer.from(stdinData, 'utf8').toString('base64');
       const proxyContent = this.getTemplate('proxy').replace('{{STDIN_DATA}}', encodedStdin);
 
       return {

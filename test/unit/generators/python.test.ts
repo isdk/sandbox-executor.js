@@ -55,8 +55,8 @@ describe('PythonGenerator', () => {
       
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
       
-      // Skip 5 bytes header: [Mode(1b)][Length(4b)]
-      const jsonStr = stdin.substring(5);
+      // Skip 9 bytes header: [Mode(1b)][Length(8b hex)]
+      const jsonStr = stdin.substring(9);
       const request = JSON.parse(jsonStr);
       
       expect(request.functionName).toBe(functionName);

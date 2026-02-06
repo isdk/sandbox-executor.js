@@ -33,10 +33,10 @@ def execute_request(request):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             _USER_MODULE_CACHE[file_path] = module
-        
+
         module = _USER_MODULE_CACHE[file_path]
         func = getattr(module, func_name)
-        
+
         result = func(*args, **kwargs)
         return {
             "success": True,
@@ -54,21 +54,21 @@ def execute_request(request):
 
 def main():
     try:
-        # Read protocol header: [Mode(1b)][Length(4b)]
-        header = sys.stdin.buffer.read(5)
-        if len(header) < 5:
+        # Read protocol header: [Mode(1b)][Length(8b hex)]
+        header = sys.stdin.buffer.read(9)
+        if len(header) < 9:
             return
-        
+
         mode = chr(header[0])
-        length = int.from_bytes(header[1:5], 'big')
-        
+        length = int(header[1:9].decode('ascii'), 16)
+
         if mode == 'A': # Atomic mode
             payload = sys.stdin.buffer.read(length)
             if not payload:
                 raise ValueError("Empty payload")
             request = json.loads(payload.decode('utf-8'))
             output = execute_request(request)
-            
+
             print(START_MARKER)
             print(json.dumps(output, ensure_ascii=False))
             print(END_MARKER)

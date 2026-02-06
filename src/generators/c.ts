@@ -98,10 +98,10 @@ export class CGenerator extends CodeGenerator {
       extractParamsCode += `    ${extraction}\n`;
     });
 
-    const returnType = (signature as any).returnType || 'double';
+    const returnType = ((signature as any).returnType || 'double').toLowerCase();
     let callAndReturnCode = '';
     
-    if (returnType === 'void') {
+    if (returnType.includes('void')) {
       callAndReturnCode = `
     ${functionName}(${callArgs.join(', ')});
     cJSON *res = cJSON_CreateObject();
@@ -111,9 +111,9 @@ export class CGenerator extends CodeGenerator {
 `;
     } else {
       let createResultCode = '';
-      if (returnType === 'string' || returnType === 'char*') {
+      if (returnType.includes('char*') || returnType.includes('char *') || returnType.includes('string')) {
         createResultCode = `cJSON_CreateString(${functionName}(${callArgs.join(', ')}))`;
-      } else if (returnType === 'boolean' || returnType === 'bool') {
+      } else if (returnType.includes('bool')) {
         createResultCode = `cJSON_CreateBool(${functionName}(${callArgs.join(', ')}))`;
       } else {
         createResultCode = `cJSON_CreateNumber(${functionName}(${callArgs.join(', ')}))`;

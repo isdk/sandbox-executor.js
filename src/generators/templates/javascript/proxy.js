@@ -49,11 +49,13 @@ async function main() {
   if (mByte < 0) return;
   const mode = String.fromCharCode(mByte);
   
-  const b1 = stdin.getByte();
-  const b2 = stdin.getByte();
-  const b3 = stdin.getByte();
-  const b4 = stdin.getByte();
-  const length = ((b1 << 24) | (b2 << 16) | (b3 << 8) | b4) >>> 0;
+  let lenStr = '';
+  for (let i = 0; i < 8; i++) {
+    const b = stdin.getByte();
+    if (b < 0) break;
+    lenStr += String.fromCharCode(b);
+  }
+  const length = parseInt(lenStr, 16);
 
   if (mode === 'A') {
     let payload = '';

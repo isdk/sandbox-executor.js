@@ -9,15 +9,16 @@
 cJSON* __sandbox_dispatch(cJSON* params);
 
 int main() {
-    unsigned char header[5];
-    for (int i = 0; i < 5; i++) {
+    char header[10];
+    for (int i = 0; i < 9; i++) {
         int c = getchar();
         if (c == EOF) return 0;
-        header[i] = (unsigned char)c;
+        header[i] = (char)c;
     }
+    header[9] = '\0';
 
-    char mode = (char)header[0];
-    unsigned int length = (header[1] << 24) | (header[2] << 16) | (header[3] << 8) | header[4];
+    char mode = header[0];
+    unsigned int length = (unsigned int)strtoul(&header[1], NULL, 16);
 
     if (mode == 'A') {
         char *buffer = (char *)malloc(length + 1);
@@ -30,7 +31,17 @@ int main() {
 
         cJSON *json = cJSON_Parse(buffer);
         if (json == NULL) {
-            printf("%s\n{\"success\": false, \"error\": {\"message\": \"Failed to parse stdin JSON\", \"type\": \"ParseError\"}} \n%s\n", START_MARKER, END_MARKER);
+            cJSON *err_res = cJSON_CreateObject();
+            cJSON_AddItemToObject(err_res, "success", cJSON_CreateBool(0));
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddItemToObject(err_res, "error", error);
+            cJSON_AddItemToObject(error, "message", cJSON_CreateString("Failed to parse stdin JSON"));
+            cJSON_AddItemToObject(error, "type", cJSON_CreateString("ParseError"));
+            cJSON_AddItemToObject(error, "data", cJSON_CreateString(buffer));
+            char *err_out = cJSON_PrintUnformatted(err_res);
+            printf("%s\n%s\n%s\n", START_MARKER, err_out, END_MARKER);
+            free(err_out);
+            cJSON_Delete(err_res);
             free(buffer);
             return 0;
         }

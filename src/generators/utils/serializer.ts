@@ -30,7 +30,7 @@ export class Serializer {
     if (value === null || value === undefined) return 'nil';
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number') return String(value);
-    if (typeof value === 'string') return JSON.stringify(value);
+    if (typeof value === 'string') return JSON.stringify(value).replace(/\$/g, '\\$');
     if (Array.isArray(value)) {
       return `[${value.map(v => this.ruby(v)).join(', ')}]`;
     }
@@ -49,7 +49,7 @@ export class Serializer {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number') return String(value);
-    if (typeof value === 'string') return JSON.stringify(value);
+    if (typeof value === 'string') return JSON.stringify(value).replace(/\$/g, '\\$');
     if (Array.isArray(value)) {
       return '[' + value.map(v => this.phpCgi(v)).join(', ') + ']';
     }
@@ -94,6 +94,8 @@ export class Serializer {
       .replace(/"/g, '\\"')
       .replace(/\n/g, '\\n')
       .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t');
+      .replace(/\t/g, '\\t')
+      .replace(/\v/g, '\\v')
+      .replace(/\f/g, '\\f');
   }
 }

@@ -120,33 +120,146 @@ describe('Arguments Passing Modes - Cross Language', () => {
     });
   });
 
-  describe('Auto Mode Threshold Logic', () => {
-    const pythonCode = 'def large_data(data): return len(data)';
+  describe('Complex Data & Boundary Characters', () => {
+    const testCases = [
+      {
+        name: 'nested objects and arrays',
+        args: [
+          42,
+          { key: 'value', list: [1, 2, 3] },
+          ['a', 'b', 'c']
+        ]
+      },
+      {
+        name: 'boundary characters (quotes, backslashes, etc)',
+        args: [
+          "quote'\"\\; $PATH `echo hi` \n\r\t",
+          "unicode: 🚀 中文"
+        ]
+      }
+    ];
 
-    it('should use inline for small data in auto mode', async () => {
-      const result = await executor.execute({
-        language: 'python',
-        code: pythonCode,
-        functionName: 'large_data',
-        args: ['short'],
-        options: { argsMode: 'auto' }
+    const scriptLanguages = [
+      { lang: 'python', code: 'def test_echo(*args, **kwargs): return args[0]' },
+      { lang: 'javascript', code: 'export function test_echo(...args) { return args[0]; }' },
+      { lang: 'ruby', code: 'def test_echo(*args); args[0]; end' },
+      { lang: 'php', code: 'function test_echo(...$args) { return $args[0]; }' }
+    ];
+
+    scriptLanguages.forEach(({ lang, code }) => {
+      describe(lang, () => {
+        testCases.forEach(({ name, args }) => {
+          it(`should handle ${name} in inline mode`, async () => {
+            const result = await executor.execute({
+              language: lang as any,
+              code,
+              functionName: 'test_echo',
+              args,
+              options: { argsMode: 'inline' }
+            });
+            expect(result.success).toBe(true);
+            expect(result.result).toEqual(args[0]);
+          });
+
+          it(`should handle ${name} in stdin mode`, async () => {
+            const result = await executor.execute({
+              language: lang as any,
+              code,
+              functionName: 'test_echo',
+              args,
+              options: { argsMode: 'stdin' }
+            });
+            expect(result.success).toBe(true);
+            expect(result.result).toEqual(args[0]);
+          });
+        });
       });
-      expect(result.success).toBe(true);
-      // We check if it used inline by inspecting the generated files if we could,
-      // but here we just ensure correctness.
     });
 
-    it('should use file for large data in auto mode (> 8KB)', async () => {
-      const largeStr = 'a'.repeat(10000);
-      const result = await executor.execute({
-        language: 'python',
-        code: pythonCode,
-        functionName: 'large_data',
-        args: [largeStr],
-        options: { argsMode: 'auto' }
+    describe('C/C++ Strings', () => {
+      const boundaryStr = "quote'\"\\; $PATH \n\r\t";
+      ['c', 'cpp'].forEach(lang => {
+        it(`should handle boundary characters in ${lang} (inline)`, async () => {
+          const result = await executor.execute({
+            language: lang as any,
+            code: lang === 'c'
+              ? '#include <string.h>\nconst char* test_echo(const char* s) { return s; }'
+              : '#include <string>\nstd::string test_echo(std::string s) { return s; }',
+            functionName: 'test_echo',
+            args: [boundaryStr],
+            options: { argsMode: 'inline' }
+          });
+          expect(result.success).toBe(true);
+          expect(result.result).toBe(boundaryStr);
+        });
       });
-      expect(result.success).toBe(true);
-      expect(result.result).toBe(10000);
+    });
+  });
+
+  describe('Null, Empty & Edge Cases', () => {
+    const cases = [
+      { name: 'null', args: [null] },
+      { name: 'empty array', args: [[]] },
+      { name: 'empty object', args: [{}] },
+      { name: 'empty string', args: [""] }
+    ];
+
+    ['python', 'javascript', 'ruby'].forEach(lang => {
+      describe(lang, () => {
+        cases.forEach(({ name, args }) => {
+          it(`should handle ${name}`, async () => {
+            const result = await executor.execute({
+              language: lang as any,
+              code: lang === 'python' ? 'def test(a): return a' : (lang === 'ruby' ? 'def test(a); a; end' : 'export function test(a){return a}'),
+              functionName: 'test',
+              args
+            });
+            expect(result.success).toBe(true);
+            if (name === 'null' && lang === 'python') {
+              expect(result.result).toBeNull();
+            } else {
+              expect(result.result).toEqual(args[0]);
+            }
+          });
+        });
+      });
+    });
+  });
+
+  describe('Auto Mode Threshold Logic (Cross-Language)', () => {
+    const langs = [
+      { lang: 'python', code: 'def large_data(data): return len(data)' },
+      { lang: 'javascript', code: 'export function large_data(data) { return data.length; }' },
+      { lang: 'ruby', code: 'def large_data(data); data.length; end' }
+    ];
+
+    langs.forEach(({ lang, code }) => {
+      describe(lang, () => {
+        it('should use inline for small data in auto mode', async () => {
+          const result = await executor.execute({
+            language: lang as any,
+            code,
+            functionName: 'large_data',
+            args: ['short'],
+            options: { argsMode: 'auto' }
+          });
+          expect(result.success).toBe(true);
+          expect(result.result).toBe(5);
+        });
+
+        it('should use file for large data in auto mode', async () => {
+          const largeStr = 'a'.repeat(10000);
+          const result = await executor.execute({
+            language: lang as any,
+            code,
+            functionName: 'large_data',
+            args: [largeStr],
+            options: { argsMode: 'auto' }
+          });
+          expect(result.success).toBe(true);
+          expect(result.result).toBe(10000);
+        });
+      });
     });
   });
 });

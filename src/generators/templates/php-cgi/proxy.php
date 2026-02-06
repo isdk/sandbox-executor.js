@@ -61,16 +61,16 @@ function execute_request($request) {
 // Pseudo-stdin: Decode from embedded base64 data
 $input = base64_decode('{{STDIN_DATA}}');
 
-if (strlen($input) < 5) {
+if (strlen($input) < 9) {
     exit;
 }
 
 $mode = $input[0];
-$lenData = substr($input, 1, 4);
-$length = unpack('N', $lenData)[1];
+$lenHex = substr($input, 1, 8);
+$length = hexdec($lenHex);
 
 if ($mode === 'A') {
-    $payload = substr($input, 5, $length);
+    $payload = substr($input, 9, $length);
     $request = json_decode($payload, true);
     $output = execute_request($request);
 

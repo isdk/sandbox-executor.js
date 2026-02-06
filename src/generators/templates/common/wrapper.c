@@ -14,7 +14,17 @@ int main() {
     
     cJSON *json = cJSON_Parse(args_json);
     if (json == NULL) {
-        printf("%s\n{\"success\": false, \"error\": {\"message\": \"Failed to parse inline JSON\", \"type\": \"ParseError\"}} \n%s\n", START_MARKER, END_MARKER);
+        cJSON *err_res = cJSON_CreateObject();
+        cJSON_AddItemToObject(err_res, "success", cJSON_CreateBool(0));
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddItemToObject(err_res, "error", error);
+        cJSON_AddItemToObject(error, "message", cJSON_CreateString("Failed to parse inline JSON"));
+        cJSON_AddItemToObject(error, "type", cJSON_CreateString("ParseError"));
+        cJSON_AddItemToObject(error, "data", cJSON_CreateString(args_json));
+        char *err_out = cJSON_PrintUnformatted(err_res);
+        printf("%s\n%s\n%s\n", START_MARKER, err_out, END_MARKER);
+        free(err_out);
+        cJSON_Delete(err_res);
         return 1;
     }
 
