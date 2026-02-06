@@ -55,7 +55,7 @@ describe('RubyGenerator', () => {
 
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
 
-      // Skip 5 bytes header
+      // Skip 9 bytes header
       const jsonStr = stdin.substring(9);
       const request = JSON.parse(jsonStr);
 
