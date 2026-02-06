@@ -6,18 +6,47 @@
 
 Sandbox Executor 旨在为基于 WebAssembly 的沙盒提供高级的、以函数为中心的 API。
 
+### 设计理念
+
+* **标准 I/O 作为通信桥梁**: 使用 `stdin` 作为沙盒内的函数输入，`stdout` 作为函数输出。这种设计使得执行器能够支持任意编程语言，并能更方便地对实际沙盒库进行更换或迭代。
+* **SIP (Sandbox Input Protocol)**: 为了确保鲁棒性和未来扩展性，输入采用长度前缀协议：
+  * **第 1 字节**: 模式（`'A'` 代表原子模式，`'P'` 代表持久模式）。
+  * **第 2-5 字节**: 4 字节大端序整数，表示 JSON 负载的字节长度。
+  * **后续字节**: JSON 格式的调用请求（包含 `functionName`, `args`, `kwargs` 等）。
+* **代理/用户代码分离**: 每种语言都由一个 `main` 代理程序负责处理 SIP 协议，并动态加载存放用户逻辑的 `user_code` 文件。
+
+### 技术限制与未来规划
+
+* **Stdin 缓冲区限制**: 当前底层的 `runFS` 实现对 `stdin` 的一次性输入有 **8188 字节 (8KB)** 的限制。
+* **流式 Stdin**: 未来计划重构 `runFS` 以支持流式 `stdin` API（例如通过 `ReadableStream`）。
+
+### PHP-CGI 方案细节：伪 Stdin (Pseudo-Stdin)
+
+由于 `php-cgi` 在 WASM 环境（如 `@runno/sandbox`）中对标准输入流的支持存在限制：
+
+1. **流读取不稳定**: `php://stdin` 和 `php://input` 在部分运行时下可能无法正确读取通过 `runFS` 传递的 `stdin` 字符串。
+2. **CGI 协议冲突**: `php-cgi` 往往期望符合 CGI 协议的输入，而简单的字符串写入可能被忽略。
+
+**解决方案：**
+PHP 生成器采用了“伪 Stdin”方案。在生成 `main.php` 代理文件时，执行器会将 SIP 协议数据包进行 Base64 编码，并将其作为常量字符串嵌入到代码模板中。
+
+* **生成阶段**: `encodedData = base64_encode(SIP_Packet)` -> 替换模板中的 `{{STDIN_DATA}}`。
+* **执行阶段**: 代理程序直接调用 `base64_decode` 获取输入，而不再尝试读取真正的标准输入。
+这种方案在确保兼容性的同时，保持了代理程序逻辑与其他语言的一致性。
+
 ### 核心组件
 
 1. **`SandboxExecutor` (src/executor.ts)**: 主要入口点。它编排整个执行生命周期：
     * 签名推断。
-    * 代码包装。
-    * 文件系统准备。
+    * 文件系统准备（包含生成代理文件和用户代码文件）。
+    * 通过 `generateStdin` 构建 SIP 数据包。
     * 通过 `@runno/sandbox` 进行 WASM 执行。
-    * 执行后的变更检测和清理。
+    * 执行后的变更检测和结果解析。
 
 2. **代码生成器 (src/generators/)**:
-    * 每种语言都有一个 `CodeGenerator`，负责将用户代码包装到执行上下文中。
-    * 包装代码负责调用目标函数，捕获结果/错误，并使用特定的标记 (`__SANDBOX_RESULT_START__`) 将其序列化到 `stdout`。
+    * 每种语言都有一个 `CodeGenerator`，实现 `generateFiles` 和 `generateStdin`。
+    * 代理程序负责从 `stdin` 读取 SIP 包，解析并调用目标函数，将结果序列化到 `stdout`。
+    * **静态代理与动态转发**: 对于不支持反射的语言（如 C/C++），生成器会动态生成一个 `dispatcher` 胶水层来处理函数分发。
 
 3. **签名推断 (src/inference/engine.ts)**:
     * 使用静态分析（基于正则）和语言约定来确定函数参数。

@@ -7,6 +7,7 @@ import {
   RubyGenerator,
   RESULT_MARKERS,
 } from '../../../src/generators';
+import { InputProtocol } from '../../../src/types/request';
 
 describe('generators/index', () => {
   describe('getGenerator', () => {
@@ -64,9 +65,9 @@ describe('generators/index', () => {
           expect(generator.fileExtension).toMatch(/^\.\w+$/);
         });
 
-        it('生成的代码应该包含结果标记', () => {
-          const result = generator.generateExecutionCode(
-            'def test; end',
+        it('应该生成 main 文件和用户代码文件', () => {
+          const files = generator.generateFiles(
+            'test',
             'test',
             [],
             {},
@@ -79,8 +80,14 @@ describe('generators/index', () => {
             }
           );
 
-          expect(result).toContain(RESULT_MARKERS.START);
-          expect(result).toContain(RESULT_MARKERS.END);
+          expect(files[`main${generator.fileExtension}`]).toBeDefined();
+        });
+
+        it('generateStdin 应该以 InputProtocol.ATOMIC 开头 (原子模式)', () => {
+           const stdin = generator.generateStdin('test', [], {});
+           if (typeof stdin === 'string') {
+             expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
+           }
         });
       });
     });

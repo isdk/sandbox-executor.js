@@ -2,6 +2,20 @@ import type { MountConfig } from './mount';
 import { PermissionRule } from './permissions';
 
 /**
+ * Protocol headers for stdin communication.
+ */
+export const InputProtocol = {
+  /** Atomic mode: read entire stdin until EOF. */
+  ATOMIC: 'A',
+  /** Stream mode: read length-prefixed blocks. */
+  STREAM: 'S',
+  /** Persistent mode: continuous loop with length-prefixed blocks. */
+  PERSISTENT: 'P',
+} as const;
+
+export type InputProtocolType = typeof InputProtocol[keyof typeof InputProtocol];
+
+/**
  * Status of the code execution.
  */
 export type ExecutionStatus = 'success' | 'error' | 'crash' | 'timeout' | 'terminated';
@@ -156,6 +170,8 @@ export interface FunctionCallRequest<
   files?: Record<string, string | Uint8Array>;
   /** Initial working directory in the sandbox. */
   workdir?: string;
+  /** Execution timeout in seconds. */
+  timeout?: number;
   /** Options for the result output. */
   resultOptions?: ResultOptions;
 }

@@ -176,6 +176,7 @@ interface FunctionCallRequest {
   mount?: MountConfig;
   files?: Record<string, string | Uint8Array>;
   workdir?: string;
+  timeout?: number; // 运行超时时间（秒）
   resultOptions?: {
     includeChanges?: boolean;
     includeContents?: boolean;
@@ -538,6 +539,10 @@ switch (result.status) {
     break;
 }
 ```
+
+## ⚠️ 技术限制
+
+* **参数大小限制**: 由于底层 WASM 运行时的限制，通过 `stdin` 传递的参数（`args` 和 `kwargs` 序列化后的 JSON）当前建议不要超过 **8KB (8188 字节)**。如果需要传递更大数据，建议通过 `files` 参数创建虚拟文件。
 
 ## 🤝 贡献
 

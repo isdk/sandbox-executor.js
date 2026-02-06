@@ -6,18 +6,47 @@ First off, thank you for considering contributing to Sandbox Executor! It's peop
 
 Sandbox Executor is designed to provide a high-level, function-centric API on top of WebAssembly-based sandboxes.
 
+### Design Philosophy
+
+* **Standard I/O as Communication Bridge**: Use `stdin` for function input within the sandbox and `stdout` for function output. This design allows the executor to support any programming language and facilitates easier replacement or iteration of the underlying sandbox library.
+* **SIP (Sandbox Input Protocol)**: To ensure robustness and future extensibility, input uses a length-prefix protocol:
+  * **1st Byte**: Mode (`'A'` for Atomic, `'P'` for Persistent).
+  * **Bytes 2-5**: 4-byte big-endian integer representing the length of the JSON payload.
+  * **Subsequent Bytes**: JSON call request (containing `functionName`, `args`, `kwargs`, etc.).
+* **Proxy/User-Code Separation**: Each language has a `main` proxy program responsible for handling the SIP protocol and dynamically loading the `user_code` file containing the user logic.
+
+### Technical Limitations & Future Roadmap
+
+* **Stdin Buffer Limit**: The current underlying `runFS` implementation has a limit of **8188 bytes (8KB)** for a single `stdin` input.
+* **Streaming Stdin**: Refactoring `runFS` to support a streaming `stdin` API (e.g., via `ReadableStream`) is planned.
+
+### PHP-CGI Solution: Pseudo-Stdin
+
+The `php-cgi` runtime in certain WASM environments (like `@runno/sandbox`) has several limitations regarding standard input:
+
+1. **Unreliable Stream Access**: `php://stdin` and `php://input` may fail to read the `stdin` string passed via `runFS` in some runtimes.
+2. **CGI Protocol Conflicts**: `php-cgi` often expects inputs adhering to the CGI protocol, causing simple raw string writes to be ignored.
+
+**Solution:**
+The PHP generator employs a "Pseudo-Stdin" strategy. When generating the `main.php` proxy, the executor Base64-encodes the SIP protocol packet and embeds it directly into the code template as a constant string.
+
+* **Generation**: `encodedData = base64_encode(SIP_Packet)` -> replaces `{{STDIN_DATA}}` in the template.
+* **Execution**: The proxy program calls `base64_decode` to retrieve the input instead of attempting to read from the actual `stdin` stream.
+This ensures compatibility while maintaining a consistent internal logic with other language proxies.
+
 ### Core Components
 
 1. **`SandboxExecutor` (src/executor.ts)**: The main entry point. It orchestrates the entire execution lifecycle:
     * Signature inference.
-    * Code wrapping.
-    * File system preparation.
+    * File system preparation (generating proxy and user-code files).
+    * Building SIP packets via `generateStdin`.
     * WASM execution via `@runno/sandbox`.
-    * Post-execution change detection and cleanup.
+    * Post-execution change detection and result parsing.
 
 2. **Code Generators (src/generators/)**:
-    * Each language has a `CodeGenerator` that wraps user code into an execution harness.
-    * The harness is responsible for calling the target function, capturing the result/error, and serializing it to `stdout` using specific markers (`__SANDBOX_RESULT_START__`).
+    * Each language has a `CodeGenerator` implementing `generateFiles` and `generateStdin`.
+    * The proxy program reads the SIP packet from `stdin`, parses it, calls the target function, and serializes the result to `stdout`.
+    * **Static Proxy with Dynamic Dispatch**: For languages without reflection (e.g., C/C++), the generator dynamically creates a `dispatcher` glue layer to handle function routing.
 
 3. **Signature Inference (src/inference/engine.ts)**:
     * Uses static analysis (regex-based) and language conventions to determine function parameters.

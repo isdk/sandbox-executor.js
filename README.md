@@ -176,6 +176,7 @@ interface FunctionCallRequest {
   mount?: MountConfig;
   files?: Record<string, string | Uint8Array>;
   workdir?: string;
+  timeout?: number; // Execution timeout in seconds
   resultOptions?: {
     includeChanges?: boolean;
     includeContents?: boolean;
@@ -538,6 +539,10 @@ switch (result.status) {
     break;
 }
 ```
+
+## ⚠️ Technical Limitations
+
+* **Argument Size Limit**: Due to the underlying WASM runtime constraints, the serialized parameters (`args` and `kwargs` as JSON) passed via `stdin` are currently limited to **8KB (8188 bytes)**. For larger data, please use the `files` parameter to provide virtual files.
 
 ## 🤝 Contributing
 

@@ -1,8 +1,6 @@
-// tests/unit/generators/javascript.test.ts
-
 import { describe, it, expect } from 'vitest';
-import { JavaScriptGenerator } from '../../../src/generators/javascript';
-import { RESULT_MARKERS } from '../../../src/generators/base';
+import { JavaScriptGenerator } from '../../../src/generators';
+import { InputProtocol } from '../../../src/types/request';
 import type { InferredSignature } from '../../../src/inference/engine';
 
 describe('JavaScriptGenerator', () => {
@@ -10,9 +8,9 @@ describe('JavaScriptGenerator', () => {
 
   const defaultSignature: InferredSignature = {
     params: [],
-    variadic: false,
-    acceptsKwargs: false,
-    hasOptionsParam: true,
+    variadic: true,
+    acceptsKwargs: true,
+    hasOptionsParam: false,
     source: 'convention',
   };
 
@@ -26,105 +24,54 @@ describe('JavaScriptGenerator', () => {
     });
   });
 
-  describe('options 参数模式', () => {
-    it('当 hasOptionsParam 为 true 时，kwargs 应该作为最后一个对象参数', () => {
-      const signature: InferredSignature = {
-        ...defaultSignature,
-        hasOptionsParam: true,
-      };
+  describe('generateFiles', () => {
+    it('应该生成包含 main.js 和 user_code.js 的文件映射', () => {
+      const userCode = 'function add(a, b) { return a + b; }';
+      const files = generator.generateFiles(
+        userCode,
+        'add',
+        [1, 2],
+        {},
+        defaultSignature
+      );
+      expect(files['main.js']).toBeDefined();
+      expect(files['user_code.js']).toContain('export function add');
+      const proxyCode = files['main.js'] as string;
+      expect(proxyCode).toContain("import * as std from 'std'");
+      expect(proxyCode).toContain('START_MARKER = "__SANDBOX_RESULT_START__"');
+    });
 
-      const result = generator.generateExecutionCode(
-        'function func(a, options) {}',
-        'func',
+    it('应该能够识别并添加 export', () => {
+      const userCode = 'const myFunc = (a) => a';
+      const files = generator.generateFiles(
+        userCode,
+        'myFunc',
         [1],
-        { foo: 'bar', baz: 42 },
-        signature
+        {},
+        defaultSignature
       );
-
-      expect(result).toContain('func(1, {"foo":"bar","baz":42})');
-    });
-
-    it('没有位置参数时，应该只传 options 对象', () => {
-      const signature: InferredSignature = {
-        ...defaultSignature,
-        hasOptionsParam: true,
-      };
-
-      const result = generator.generateExecutionCode(
-        'function func(options) {}',
-        'func',
-        [],
-        { foo: 'bar' },
-        signature
-      );
-
-      expect(result).toContain('func({"foo":"bar"})');
+      expect(files['user_code.js']).toContain('export const myFunc');
     });
   });
 
-  describe('参数映射模式', () => {
-    it('应该将 kwargs 映射到对应的位置参数', () => {
-      const signature: InferredSignature = {
-        params: [
-          { name: 'a', required: true },
-          { name: 'b', required: true },
-          { name: 'c', required: false },
-        ],
-        variadic: false,
-        acceptsKwargs: false,
-        hasOptionsParam: false,
-        source: 'inferred',
-      };
+  describe('generateStdin', () => {
+    it('应该生成以 InputProtocol.ATOMIC 开头的 JSON 字符串', () => {
+      const functionName = 'calculate';
+      const args = [10, 20];
+      const kwargs = { mode: 'fast' };
 
-      const result = generator.generateExecutionCode(
-        'function func(a, b, c) {}',
-        'func',
-        [1],  // a = 1
-        { b: 2, c: 3 },  // 映射 b 和 c
-        signature
-      );
+      const stdin = generator.generateStdin(functionName, args, kwargs) as string;
 
-      expect(result).toContain('func(1, 2, 3)');
-    });
-  });
+      expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
 
-  describe('包装器代码', () => {
-    it('应该使用 async IIFE', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
+      // Skip 5 bytes header
+      const jsonStr = stdin.substring(5);
+      const request = JSON.parse(jsonStr);
 
-      expect(result).toContain('(async () => {');
-      expect(result).toContain('})();');
-    });
-
-    it('应该使用 await 调用函数', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('await (func())');
-    });
-
-    it('应该包含 try-catch 错误处理', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('try {');
-      expect(result).toContain('} catch (e) {');
+      expect(request.functionName).toBe(functionName);
+      expect(request.args).toEqual(args);
+      expect(request.kwargs).toEqual(kwargs);
+      expect(request.filePath).toBe(`./user_code${generator.fileExtension}`);
     });
   });
 });

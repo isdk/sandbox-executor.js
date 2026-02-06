@@ -122,7 +122,18 @@ export class SignatureInferenceEngine {
       // Basic C param: type name
       const parts = trimmed.split(/\s+/);
       const name = parts[parts.length - 1].replace(/^\*/, ''); // handle pointers
-      params.push({ name, required: true });
+      
+      // Try to determine internal type from C type declaration
+      const cType = parts.slice(0, -1).join(' ').toLowerCase();
+      let type: ParamSchema['type'] = 'number';
+      
+      if (cType.includes('char*') || cType.includes('char *') || cType.includes('string')) {
+        type = 'string';
+      } else if (cType.includes('bool') || cType.includes('_bool')) {
+        type = 'boolean';
+      }
+      
+      params.push({ name, type, required: true });
     }
 
     return { params, variadic: false, acceptsKwargs: false, hasOptionsParam: false, returnType };

@@ -135,18 +135,22 @@ export class SandboxExecutor extends EventEmitter {
 
       // 2. 生成执行代码
       const generator = getGenerator(request.language);
-      const fullCode = generator.generateExecutionCode(
+      const executionFiles = generator.generateFiles(
         request.code,
         request.functionName,
         request.args ?? [],
         request.kwargs ?? {},
         signature
       );
+      const stdin = generator.generateStdin(
+        request.functionName,
+        request.args ?? [],
+        request.kwargs ?? {}
+      );
 
       // 3. 构建文件系统
       const { fs, snapshot, differ } = await this.buildFileSystem(
-        fullCode,
-        generator.fileExtension,
+        executionFiles,
         workdir,
         request.files,
         request.mount
@@ -155,7 +159,10 @@ export class SandboxExecutor extends EventEmitter {
       // 4. 执行代码
       const entryPath = `${workdir}/main${generator.fileExtension}`;
       const runtime = getRuntime(request.language);
-      const runResult = await runFS(runtime as any, entryPath, fs) as RunResult;
+      const runResult = await runFS(runtime as any, entryPath, fs, {
+        stdin: stdin as any,
+        timeout: request.timeout ? request.timeout * 1000 : undefined,
+      }) as RunResult;
 
       // 5. 检查执行结果类型
       if (runResult.resultType !== 'complete') {
@@ -334,16 +341,15 @@ export class SandboxExecutor extends EventEmitter {
    * 构建文件系统
    */
   private async buildFileSystem(
-    code: string,
-    extension: string,
+    executionFiles: Record<string, string | Uint8Array>,
     workdir: string,
     files?: Record<string, string | Uint8Array>,
     mount?: MountConfig
   ): Promise<{ fs: WASIFS; snapshot?: WASIFS; differ?: FileSystemDiffer }> {
     const fsBuilder = new FSBuilder({ workdir });
 
-    // 添加入口文件
-    fsBuilder.addEntryFile(`main${extension}`, code);
+    // 添加入口文件和相关代理文件
+    fsBuilder.addFiles(executionFiles);
 
     // 添加虚拟文件
     if (files) {

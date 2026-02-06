@@ -53,9 +53,10 @@ describe('SandboxExecutor', () => {
       });
 
       expect(mockRunFS).toHaveBeenCalled();
-      const [, entryPath, fs] = mockRunFS.mock.calls[0];
-      const code = fs[entryPath].content as string;
-      expect(code).toContain('add(1, 2)');
+      const [, , , options] = mockRunFS.mock.calls[0];
+      const stdin = options?.stdin as string;
+      expect(stdin.startsWith('A')).toBe(true);
+      expect(stdin).toContain('"args":[1,2]');
     });
 
     it('应该传递关键字参数', async () => {
@@ -71,9 +72,29 @@ describe('SandboxExecutor', () => {
         kwargs: { greeting: 'Hi' },
       });
 
-      const [, , fs] = mockRunFS.mock.calls[0];
-      const code = Object.values(fs)[0].content as string;
-      expect(code).toContain('greeting="Hi"');
+      const [, , , options] = mockRunFS.mock.calls[0];
+      const stdin = options?.stdin as string;
+      expect(stdin).toContain('"kwargs":{"greeting":"Hi"}');
+    });
+
+    it('应该传递自定义超时时间', async () => {
+      mockRunFS.mockResolvedValue(
+        mockCompleteResult(createSuccessOutput('ok'))
+      );
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        timeout: 5, // 5 seconds
+      });
+
+      expect(mockRunFS).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({ timeout: 5000 })
+      );
     });
   });
 
@@ -90,7 +111,8 @@ describe('SandboxExecutor', () => {
       expect(mockRunFS).toHaveBeenCalledWith(
         'python',
         expect.stringContaining('.py'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.objectContaining({ stdin: expect.any(String) })
       );
     });
 
@@ -106,7 +128,8 @@ describe('SandboxExecutor', () => {
       expect(mockRunFS).toHaveBeenCalledWith(
         'quickjs',
         expect.stringContaining('.js'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.objectContaining({ stdin: expect.any(String) })
       );
     });
 
@@ -122,7 +145,8 @@ describe('SandboxExecutor', () => {
       expect(mockRunFS).toHaveBeenCalledWith(
         'ruby',
         expect.stringContaining('.rb'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.objectContaining({ stdin: expect.any(String) })
       );
     });
   });
@@ -326,6 +350,7 @@ describe('SandboxExecutor', () => {
       expect(mockRunFS).toHaveBeenCalledWith(
         'python',
         '/workspace/main.py',
+        expect.any(Object),
         expect.any(Object)
       );
     });
@@ -345,6 +370,7 @@ describe('SandboxExecutor', () => {
       expect(mockRunFS).toHaveBeenCalledWith(
         'python',
         '/custom/main.py',
+        expect.any(Object),
         expect.any(Object)
       );
     });
@@ -524,7 +550,12 @@ describe('SandboxExecutor', () => {
         }
       });
 
-      expect(mockRunFS).toHaveBeenCalled();
+      expect(mockRunFS).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Object)
+      );
     });
 
     it('应该转发同步事件', async () => {

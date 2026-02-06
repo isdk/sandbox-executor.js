@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PHPGenerator } from '../../../src/generators';
-import { RESULT_MARKERS } from '../../../src/generators/base';
+import { InputProtocol } from '../../../src/types/request';
 import type { InferredSignature } from '../../../src/inference/engine';
 
 describe('PHPGenerator', () => {
@@ -24,10 +24,10 @@ describe('PHPGenerator', () => {
     });
   });
 
-  describe('generateExecutionCode', () => {
-    it('应该生成包含用户代码和包装器的完整代码', () => {
+  describe('generateFiles', () => {
+    it('应该生成包含 main.php 和 user_code.php 的文件映射', () => {
       const userCode = 'function add($a, $b) { return $a + $b; }';
-      const result = generator.generateExecutionCode(
+      const files = generator.generateFiles(
         userCode,
         'add',
         [1, 2],
@@ -35,127 +35,50 @@ describe('PHPGenerator', () => {
         defaultSignature
       );
 
-      expect(result).toContain(userCode);
-      expect(result).toContain('add(1, 2)');
-      expect(result).toContain(RESULT_MARKERS.START);
-      expect(result).toContain(RESULT_MARKERS.END);
+      expect(files['main.php']).toBeDefined();
+      expect(files['user_code.php']).toContain('<?php');
+      expect(files['user_code.php']).toContain(userCode);
+      
+      const proxyCode = files['main.php'] as string;
+      expect(proxyCode).toContain('<?php');
+      expect(proxyCode).toContain('function execute_request($request)');
+      expect(proxyCode).toContain('START_MARKER = "__SANDBOX_RESULT_START__"');
+    });
+
+    it('如果用户代码没有 <?php 标记，应该自动添加', () => {
+      const userCode = 'echo "hello";';
+      const files = generator.generateFiles(
+        userCode,
+        'test',
+        [],
+        {},
+        defaultSignature
+      );
+      expect(files['user_code.php'] as string).toMatch(/^<\?php/);
     });
   });
 
-  describe('参数序列化', () => {
-    it('应该正确序列化位置参数', () => {
-      const result = generator.generateExecutionCode(
-        'function func(...$args) {}',
-        'func',
-        [1, 'hello', true, null],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('func(1, "hello", true, null)');
-    });
-
-    it('应该正确序列化关键字参数', () => {
-      const result = generator.generateExecutionCode(
-        'function func($name, $age, $active) {}',
-        'func',
-        [],
-        { name: 'Alice', age: 30, active: true },
-        defaultSignature
-      );
-
-      expect(result).toContain('name: "Alice"');
-      expect(result).toContain('age: 30');
-      expect(result).toContain('active: true');
-    });
-
-    it('应该正确序列化数组', () => {
-      const result = generator.generateExecutionCode(
-        'function func($arr) {}',
-        'func',
-        [[1, 2, 3]],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('[1, 2, 3]');
-    });
-
-    it('应该正确序列化对象为关联数组', () => {
-      const result = generator.generateExecutionCode(
-        'function func($obj) {}',
-        'func',
-        [{ key: 'value', nested: { a: 1 } }],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('"key" => "value"');
-      expect(result).toContain('"nested" => ["a" => 1]');
-    });
-
-    it('应该处理 undefined 为 null', () => {
-      const result = generator.generateExecutionCode(
-        'function func($x) {}',
-        'func',
-        [undefined],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('func(null)');
+  describe('generateStdin', () => {
+    it('应该返回空字符串 (PHP 使用 pseudo-stdin)', () => {
+      const functionName = 'func';
+      const args = [1, 'test'];
+      const kwargs = { key: 'val' };
+      
+      const stdin = generator.generateStdin(functionName, args, kwargs);
+      expect(stdin).toBe('');
     });
   });
 
-  describe('包装器代码', () => {
-    it('应该包含 try-catch 错误处理', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('try {');
-      expect(result).toContain('catch (Throwable $__e__)');
+  describe('参数序列化 (内部使用)', () => {
+    it('应该正确序列化关联数组', () => {
+       // @ts-ignore - serialize is protected
+      const result = generator.serialize({ a: 1, b: 'two' });
+      expect(result).toBe('["a" => 1, "b" => "two"]');
     });
 
-    it('应该包含 JSON 序列化', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('json_encode');
-    });
-
-    it('应该包含自定义序列化函数', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain('__sandbox_serialize__');
-    });
-
-    it('应该输出结果标记', () => {
-      const result = generator.generateExecutionCode(
-        'function func() {}',
-        'func',
-        [],
-        {},
-        defaultSignature
-      );
-
-      expect(result).toContain(`echo "${RESULT_MARKERS.START}\\n"`);
-      expect(result).toContain(`echo "\\n${RESULT_MARKERS.END}\\n"`);
+    it('应该正确序列化 null 为 null', () => {
+       // @ts-ignore - serialize is protected
+      expect(generator.serialize(null)).toBe('null');
     });
   });
 });
