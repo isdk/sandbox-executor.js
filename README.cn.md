@@ -48,8 +48,7 @@ def greet(name, greeting="Hello"):
     return f"{greeting}, {name}!"
   `,
   functionName: 'greet',
-  args: ['World'],
-  kwargs: { greeting: 'Hi' },
+  args: { name: 'World', greeting: 'Hi' },
 });
 
 console.log(result.result); // "Hi, World!"
@@ -78,8 +77,7 @@ function calculate(a, b, options = {}) {
 }
   `,
   functionName: 'calculate',
-  args: [5, 3],
-  kwargs: { multiplier: 10 },
+  args: { a: 5, b: 3, multiplier: 10 },
 });
 
 console.log(jsResult.result); // 80
@@ -98,10 +96,8 @@ const result = await executor.execute({
     "b": { "index": 1, "value": 2 }, // 显式映射到索引 1
     "c": 3
   },
-  options: {
-    argsMode: 'auto', // 默认值：小数据自动选择 'inline'，大数据选择 'file'
-    timeout: 30,      // 自定义超时时间（秒）
-  }
+  argsMode: 'auto', // 默认值：小数据自动选择 'inline'，大数据选择 'file'
+  timeout: 30,      // 自定义超时时间（秒）
 });
 
 // 处理大数据量（如 Base64 字符串）
@@ -132,8 +128,10 @@ def process(input_path, output_path):
   `,
   functionName: 'process',
   args: ['/workspace/input.txt', '/workspace/output.txt'],
-  files: {
-    'input.txt': 'hello world',
+  options: {
+    files: {
+      'input.txt': 'hello world',
+    },
   },
 });
 
@@ -159,19 +157,21 @@ def process_files(input_dir, output_dir):
   functionName: 'process_files',
   args: ['/data/input', '/data/output'],
 
-  mount: {
-    dirs: {
-      '/data': './my-project/data',
+  options: {
+    mount: {
+      dirs: {
+        '/data': './my-project/data',
+      },
+      permissions: {
+        default: { read: true, list: true },
+        rules: [
+          { pattern: 'output/**', allow: ['create', 'modify'] },
+        ],
+        exclude: ['node_modules', '.git'],
+      },
+      loading: { mode: 'eager' },
+      sync: { mode: 'batch', onError: 'continue' },
     },
-    permissions: {
-      default: { read: true, list: true },
-      rules: [
-        { pattern: 'output/**', allow: ['create', 'modify'] },
-      ],
-      exclude: ['node_modules', '.git'],
-    },
-    loading: { mode: 'eager' },
-    sync: { mode: 'batch', onError: 'continue' },
   },
 });
 ```
@@ -202,25 +202,16 @@ interface FunctionCallRequest {
   code: string;
   functionName: string;
 
-  // 可选
+  // 可选 (常用)
   /**
    * 数组用于位置参数，对象用于关键字或混合参数。
    * 支持: { "paramName": { "index": number, "value": any } }
    */
   args?: ArgumentItem[] | Record<string, ArgumentItem>;
 
-  /** @deprecated 请直接将 args 设为对象 */
-  kwargs?: Record<string, any>;
+  /** 超时时间（秒） */
+  timeout?: number;
 
-  options?: InvokeOptions;
-
-  schema?: FunctionSchema;
-  mount?: MountConfig;
-  files?: Record<string, string | Uint8Array>;
-  workdir?: string;
-}
-
-interface InvokeOptions {
   /**
    * 'inline': 硬编码在源码中 (最快)
    * 'stdin': 标准 SIP 协议
@@ -229,14 +220,39 @@ interface InvokeOptions {
    */
   argsMode?: 'inline' | 'stdin' | 'file' | 'auto';
 
-  /** 超时时间（秒） */
-  timeout?: number;
+  /** 自动模式下的切换阈值 */
+  autoModeThreshold?: number;
 
-  /** 用于输入/输出校验的 JSON Schema */
-  inputSchema?: InputSchema;
-  outputSchema?: any;
+  /** 接口定义 (Schema) */
+  schema?: FunctionSchema;
 
-  resultOptions?: ResultOptions;
+  /** 运行时环境与报告配置 */
+  options?: InvokeOptions;
+
+  /** @deprecated 请直接将 args 设为对象 */
+  kwargs?: Record<string, any>;
+}
+
+interface FunctionSchema {
+  /** 输入参数定义 (JSON Schema 风格) */
+  input?: InputSchema;
+  /** 返回值定义 */
+  output?: any;
+  /** 是否开启严格校验 */
+  strict?: boolean;
+  variadic?: boolean;
+  acceptsKwargs?: boolean;
+}
+
+interface InvokeOptions {
+  /** 挂载宿主目录 */
+  mount?: MountConfig;
+  /** 预置的虚拟文件 */
+  files?: Record<string, string | Uint8Array>;
+  /** 覆盖默认工作目录 */
+  workdir?: string;
+  /** 结果报告选项 */
+  reporting?: ReportingOptions;
 }
 ```
 
@@ -348,16 +364,14 @@ await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  args: [1, 2],
-  kwargs: { c: 3 },
+  args: { a: 1, b: 2, c: 3 },
   schema: {
-    params: [
-      { name: 'a', type: 'number', required: true },
-      { name: 'b', type: 'number', required: true },
-      { name: 'c', type: 'number', required: false, default: 0 },
-    ],
-    variadic: false,
-    acceptsKwargs: false,
+    input: {
+      a: { type: 'number', required: true, index: 0 },
+      b: { type: 'number', required: true, index: 1 },
+      c: { type: 'number', required: false, default: 0, index: 2 },
+    },
+    strict: true,
   },
 });
 ```
@@ -433,9 +447,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  files: {
-    'input.txt': 'content',
-    'config.json': '{"key": "value"}',
+  options: {
+    files: {
+      'input.txt': 'content',
+      'config.json': '{"key": "value"}',
+    },
   },
 });
 // 文件仅存在于内存中
@@ -450,9 +466,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  mount: {
-    dirs: { '/workspace': './real-dir' },
-    sync: { mode: 'batch' },
+  options: {
+    mount: {
+      dirs: { '/workspace': './real-dir' },
+      sync: { mode: 'batch' },
+    },
   },
 });
 // 变更同步到真实文件系统
@@ -467,9 +485,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'generate',
-  mount: {
-    dirs: { '/workspace': './output' },
-    sync: { mode: 'manual' },
+  options: {
+    mount: {
+      dirs: { '/workspace': './output' },
+      sync: { mode: 'manual' },
+    },
   },
 });
 
@@ -539,7 +559,9 @@ const executor = createExecutor({
 // 或按请求指定
 await executor.execute({
   // ...
-  workdir: '/custom/path',
+  options: {
+    workdir: '/custom/path',
+  },
 });
 ```
 

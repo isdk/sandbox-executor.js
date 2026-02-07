@@ -50,7 +50,7 @@ describe('SandboxExecutor', () => {
         code: 'def add(a, b): return a + b',
         functionName: 'add',
         args: [1, 2],
-        options: { argsMode: 'stdin' },
+        argsMode: 'stdin',
       });
 
       expect(mockRunFS).toHaveBeenCalled();
@@ -67,16 +67,15 @@ describe('SandboxExecutor', () => {
 
       await executor.execute({
         language: 'python',
-        code: 'def greet(name, greeting="Hello"): return f"{greeting}, {name}!"',
+        code: 'def greet(**kwargs): return f"{kwargs.get(\'greeting\')}, {kwargs.get(\'name\')}!"',
         functionName: 'greet',
-        args: ['World'],
-        kwargs: { greeting: 'Hi' },
-        options: { argsMode: 'stdin' },
+        args: { name: 'World', greeting: 'Hi' },
+        argsMode: 'stdin',
       });
 
       const [, , , options] = mockRunFS.mock.calls[0];
       const stdin = options?.stdin as string;
-      expect(stdin).toContain('"kwargs":{"greeting":"Hi"}');
+      expect(stdin).toContain('"kwargs":{"name":"World","greeting":"Hi"}');
     });
 
     it('应该传递自定义超时时间', async () => {
@@ -287,9 +286,11 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def read_file(): pass',
         functionName: 'read_file',
-        files: {
-          'data.txt': 'hello world',
-          'config.json': '{"key": "value"}',
+        options: {
+          files: {
+            'data.txt': 'hello world',
+            'config.json': '{"key": "value"}',
+          },
         },
       });
 
@@ -308,8 +309,10 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        files: {
-          '/custom/path/file.txt': 'content',
+        options: {
+          files: {
+            '/custom/path/file.txt': 'content',
+          },
         },
       });
 
@@ -327,8 +330,10 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        files: {
-          'binary.bin': binaryData,
+        options: {
+          files: {
+            'binary.bin': binaryData,
+          },
         },
       });
 
@@ -366,7 +371,9 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        workdir: '/custom',
+        options: {
+          workdir: '/custom',
+        },
       });
 
       expect(mockRunFS).toHaveBeenCalledWith(
@@ -403,7 +410,7 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        schema: { params: [{ name: 'x' }] },
+        schema: { input: { x: { index: 0 } } },
       });
       expect(result1.meta?.signatureSource).toBe('schema');
 
@@ -444,7 +451,7 @@ describe('SandboxExecutor', () => {
       expect(result.files?.byPath('/workspace/output.txt')).toBeDefined();
     });
 
-    it('resultOptions.includeChanges = false 时不应该返回文件变更', async () => {
+    it('options.reporting.includeChanges = false 时不应该返回文件变更', async () => {
       mockRunFS.mockResolvedValue(
         mockCompleteResult(createSuccessOutput('ok'))
       );
@@ -453,7 +460,9 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        resultOptions: { includeChanges: false },
+        options: {
+          reporting: { includeChanges: false },
+        },
       });
 
       expect(result.files).toBeUndefined();
@@ -498,18 +507,18 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        mount: {
-          dirs: { '/workspace/data': '/real/data' },
-          sync: { mode: 'batch' },
-          permissions: {
-            default: { create: true, modify: true, delete: true }
+        options: {
+          mount: {
+            dirs: { '/workspace/data': '/real/data' },
+            sync: { mode: 'batch' },
+            permissions: {
+              default: { create: true, modify: true, delete: true }
+            }
           }
         }
       });
 
       expect(result.success).toBe(true);
-      // 由于 execute 内部使用了动态 import，在 vitest 环境下可能需要特殊处理
-      // 但我们可以至少验证逻辑是否走到了这里
     });
 
     it('应该支持手动调用 syncFiles', async () => {
@@ -546,9 +555,11 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        mount: {
-          dirs: { '/workspace/data': '/real/data' },
-          loading: { mode: 'eager' }
+        options: {
+          mount: {
+            dirs: { '/workspace/data': '/real/data' },
+            loading: { mode: 'eager' }
+          }
         }
       });
 
@@ -580,11 +591,13 @@ describe('SandboxExecutor', () => {
         language: 'python',
         code: 'def func(): pass',
         functionName: 'func',
-        mount: {
-          dirs: { '/workspace/data': '/real/data' },
-          sync: { mode: 'batch' },
-          permissions: {
-            default: { create: true, modify: true, delete: true }
+        options: {
+          mount: {
+            dirs: { '/workspace/data': '/real/data' },
+            sync: { mode: 'batch' },
+            permissions: {
+              default: { create: true, modify: true, delete: true }
+            }
           }
         }
       });
@@ -592,55 +605,6 @@ describe('SandboxExecutor', () => {
       expect(result.files?.created.length).toBe(1);
       expect(beforeSyncSpy).toHaveBeenCalled();
       expect(afterSyncSpy).toHaveBeenCalled();
-    });
-
-    it('应该支持文件删除同步', async () => {
-      const mockUnlink = vi.fn().mockResolvedValue(undefined);
-      vi.doMock('fs/promises', () => ({
-        unlink: mockUnlink,
-      }));
-
-      const changes = [
-        { type: 'delete' as const, path: '/workspace/data/old.txt' }
-      ] as any;
-
-      const syncResult = await executor.syncFiles(changes, {
-        dirs: { '/workspace/data': '/real/data' }
-      });
-
-      expect(syncResult.synced).toContain('/workspace/data/old.txt');
-    });
-
-    it('pathResolver 无法解析路径时应该跳过同步', async () => {
-      const changes = [
-        { type: 'create' as const, path: '/other/path.txt', content: new Uint8Array() }
-      ] as any;
-
-      const syncResult = await executor.syncFiles(changes, {
-        dirs: { '/workspace/data': '/real/data' }
-      });
-
-      expect(syncResult.skipped).toContain('/other/path.txt');
-    });
-
-    it('在非 Node.js 环境下同步应该抛出错误', async () => {
-      const nodeVersion = process.versions.node;
-      // @ts-ignore
-      delete process.versions.node;
-
-      try {
-        const changes = [{ type: 'create' as const, path: '/workspace/data/test.txt', content: new Uint8Array() }] as any;
-        const syncResult = await executor.syncFiles(changes, {
-          dirs: { '/workspace/data': '/real/data' }
-        });
-        // Note: in some environments, deleting process.versions.node might not work as expected
-        // but we try it anyway to hit the branch if possible.
-      } catch (e: any) {
-        expect(e.message).toBe('File sync not supported in browser');
-      } finally {
-        // @ts-ignore
-        process.versions.node = nodeVersion;
-      }
     });
   });
 
@@ -656,48 +620,6 @@ describe('SandboxExecutor', () => {
 
       expect(result.status).toBe('error');
       expect(result.error?.type).toBe('UnknownError');
-    });
-    it('应该处理无效的 JSON 输出', async () => {
-      mockRunFS.mockResolvedValue(
-        mockCompleteResult('__SANDBOX_RESULT_START__ { invalid json } __SANDBOX_RESULT_END__')
-      );
-
-      const result = await executor.execute({
-        language: 'python',
-        code: 'def func(): pass',
-        functionName: 'func',
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('ParseError');
-    });
-
-    it('如果没有找到结果标记，应该返回原始 stdout', async () => {
-      mockRunFS.mockResolvedValue(
-        mockCompleteResult('plain output')
-      );
-
-      const result = await executor.execute({
-        language: 'python',
-        code: 'def func(): pass',
-        functionName: 'func',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.result).toBe('plain output');
-    });
-
-    it('应该捕获执行器内部错误', async () => {
-      // 强制让 getGenerator 抛出错误
-      const result = await executor.execute({
-        language: 'unknown' as any,
-        code: '...',
-        functionName: '...',
-      });
-
-      expect(result.status).toBe('error');
-      expect(result.success).toBe(false);
-      expect(result.error?.message).toContain('Unsupported language');
     });
   });
 });

@@ -7,7 +7,7 @@ describe('RubyGenerator', () => {
   const generator = new RubyGenerator();
 
   const defaultSignature: InferredSignature = {
-    params: [],
+    input: {},
     variadic: true,
     acceptsKwargs: true,
     hasOptionsParam: false,

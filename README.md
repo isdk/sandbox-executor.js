@@ -48,8 +48,7 @@ def greet(name, greeting="Hello"):
     return f"{greeting}, {name}!"
   `,
   functionName: 'greet',
-  args: ['World'],
-  kwargs: { greeting: 'Hi' },
+  args: { name: 'World', greeting: 'Hi' },
 });
 
 console.log(result.result); // "Hi, World!"
@@ -78,8 +77,7 @@ function calculate(a, b, options = {}) {
 }
   `,
   functionName: 'calculate',
-  args: [5, 3],
-  kwargs: { multiplier: 10 },
+  args: { a: 5, b: 3, multiplier: 10 },
 });
 
 console.log(jsResult.result); // 80
@@ -98,10 +96,8 @@ const result = await executor.execute({
     "b": { "index": 1, "value": 2 }, // Explicitly map to index 1
     "c": 3
   },
-  options: {
-    argsMode: 'auto', // Default: chooses 'inline' for small data, 'file' for large
-    timeout: 30,      // Custom timeout in seconds
-  }
+  argsMode: 'auto', // Default: chooses 'inline' for small data, 'file' for large
+  timeout: 30,      // Custom timeout in seconds
 });
 
 // Handling large data (e.g., Base64 strings)
@@ -132,8 +128,10 @@ def process(input_path, output_path):
   `,
   functionName: 'process',
   args: ['/workspace/input.txt', '/workspace/output.txt'],
-  files: {
-    'input.txt': 'hello world',
+  options: {
+    files: {
+      'input.txt': 'hello world',
+    },
   },
 });
 
@@ -159,19 +157,21 @@ def process_files(input_dir, output_dir):
   functionName: 'process_files',
   args: ['/data/input', '/data/output'],
 
-  mount: {
-    dirs: {
-      '/data': './my-project/data',
+  options: {
+    mount: {
+      dirs: {
+        '/data': './my-project/data',
+      },
+      permissions: {
+        default: { read: true, list: true },
+        rules: [
+          { pattern: 'output/**', allow: ['create', 'modify'] },
+        ],
+        exclude: ['node_modules', '.git'],
+      },
+      loading: { mode: 'eager' },
+      sync: { mode: 'batch', onError: 'continue' },
     },
-    permissions: {
-      default: { read: true, list: true },
-      rules: [
-        { pattern: 'output/**', allow: ['create', 'modify'] },
-      ],
-      exclude: ['node_modules', '.git'],
-    },
-    loading: { mode: 'eager' },
-    sync: { mode: 'batch', onError: 'continue' },
   },
 });
 ```
@@ -202,25 +202,16 @@ interface FunctionCallRequest {
   code: string;
   functionName: string;
 
-  // Optional
+  // Optional (Common)
   /**
    * Array for positional, Object for keyword/mixed.
    * Supports: { "paramName": { "index": number, "value": any } }
    */
   args?: ArgumentItem[] | Record<string, ArgumentItem>;
 
-  /** @deprecated Use args as an object instead */
-  kwargs?: Record<string, any>;
+  /** Execution timeout in seconds */
+  timeout?: number;
 
-  options?: InvokeOptions;
-
-  schema?: FunctionSchema;
-  mount?: MountConfig;
-  files?: Record<string, string | Uint8Array>;
-  workdir?: string;
-}
-
-interface InvokeOptions {
   /**
    * 'inline': hardcoded in source (fastest)
    * 'stdin': standard SIP protocol
@@ -229,14 +220,39 @@ interface InvokeOptions {
    */
   argsMode?: 'inline' | 'stdin' | 'file' | 'auto';
 
-  /** Timeout in seconds */
-  timeout?: number;
+  /** Threshold for auto mode */
+  autoModeThreshold?: number;
 
-  /** JSON Schema for input/output validation */
-  inputSchema?: InputSchema;
-  outputSchema?: any;
+  /** Interface Definition */
+  schema?: FunctionSchema;
 
-  resultOptions?: ResultOptions;
+  /** Runtime Environment & Reporting */
+  options?: InvokeOptions;
+
+  /** @deprecated Use args as an object instead */
+  kwargs?: Record<string, any>;
+}
+
+interface FunctionSchema {
+  /** Input parameter schemas (JSON Schema like) */
+  input?: InputSchema;
+  /** Return value schema */
+  output?: any;
+  /** Enforce strict validation */
+  strict?: boolean;
+  variadic?: boolean;
+  acceptsKwargs?: boolean;
+}
+
+interface InvokeOptions {
+  /** Host directory mounts */
+  mount?: MountConfig;
+  /** Virtual files to seed */
+  files?: Record<string, string | Uint8Array>;
+  /** Working directory override */
+  workdir?: string;
+  /** Result reporting configuration */
+  reporting?: ReportingOptions;
 }
 ```
 
@@ -348,16 +364,14 @@ await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  args: [1, 2],
-  kwargs: { c: 3 },
+  args: { a: 1, b: 2, c: 3 },
   schema: {
-    params: [
-      { name: 'a', type: 'number', required: true },
-      { name: 'b', type: 'number', required: true },
-      { name: 'c', type: 'number', required: false, default: 0 },
-    ],
-    variadic: false,
-    acceptsKwargs: false,
+    input: {
+      a: { type: 'number', required: true, index: 0 },
+      b: { type: 'number', required: true, index: 1 },
+      c: { type: 'number', required: false, default: 0, index: 2 },
+    },
+    strict: true,
   },
 });
 ```
@@ -433,9 +447,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  files: {
-    'input.txt': 'content',
-    'config.json': '{"key": "value"}',
+  options: {
+    files: {
+      'input.txt': 'content',
+      'config.json': '{"key": "value"}',
+    },
   },
 });
 // Files exist only in memory
@@ -450,9 +466,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'process',
-  mount: {
-    dirs: { '/workspace': './real-dir' },
-    sync: { mode: 'batch' },
+  options: {
+    mount: {
+      dirs: { '/workspace': './real-dir' },
+      sync: { mode: 'batch' },
+    },
   },
 });
 // Changes synced to real filesystem
@@ -467,9 +485,11 @@ const result = await executor.execute({
   language: 'python',
   code: '...',
   functionName: 'generate',
-  mount: {
-    dirs: { '/workspace': './output' },
-    sync: { mode: 'manual' },
+  options: {
+    mount: {
+      dirs: { '/workspace': './output' },
+      sync: { mode: 'manual' },
+    },
   },
 });
 
@@ -539,7 +559,9 @@ const executor = createExecutor({
 // Or per-request
 await executor.execute({
   // ...
-  workdir: '/custom/path',
+  options: {
+    workdir: '/custom/path',
+  },
 });
 ```
 

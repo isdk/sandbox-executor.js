@@ -1,13 +1,13 @@
 // src/inference/engine.ts
 
-import type { FunctionSchema, ParamSchema, SupportedLanguage } from '../types';
+import type { FunctionSchema, InputSchema, JsonSchema, SupportedLanguage } from '../types';
 
 /**
  * Represents a function signature determined by the inference engine.
  */
 export interface InferredSignature {
-  /** List of individual parameters. */
-  params: ParamSchema[];
+  /** Input parameter schemas. */
+  input: InputSchema;
   /** Whether the function accepts variable positional arguments. */
   variadic: boolean;
   /** Whether the function accepts keyword arguments (kwargs). */
@@ -47,9 +47,9 @@ export class SignatureInferenceEngine {
     const canonicalLanguage = this.canonicalizeLanguage(language);
 
     // Priority 1: User-provided schema
-    if (schema?.params) {
+    if (schema?.input) {
       return {
-        params: schema.params,
+        input: schema.input,
         variadic: schema.variadic ?? false,
         acceptsKwargs: schema.acceptsKwargs ?? this.languageAcceptsKwargs(canonicalLanguage),
         hasOptionsParam: false,
@@ -107,13 +107,14 @@ export class SignatureInferenceEngine {
     }
   }
 
-  private inferC(code: string, functionName: string) {
+  private inferC(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
     // Basic C function regex: returnType functionName(params)
     const match = code.match(new RegExp(`([\\w\\s\\*]+)\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
     if (!match) return null;
 
     const returnType = match[1].trim();
-    const params: ParamSchema[] = [];
+    const input: Record<string, JsonSchema & { index: number }> = {};
+    let index = 0;
 
     for (const part of this.splitParams(match[2])) {
       const trimmed = part.trim();
@@ -125,7 +126,7 @@ export class SignatureInferenceEngine {
       
       // Try to determine internal type from C type declaration
       const cType = parts.slice(0, -1).join(' ').toLowerCase();
-      let type: ParamSchema['type'] = 'number';
+      let type: JsonSchema['type'] = 'number';
       
       if (cType.includes('char*') || cType.includes('char *') || cType.includes('string')) {
         type = 'string';
@@ -133,10 +134,10 @@ export class SignatureInferenceEngine {
         type = 'boolean';
       }
       
-      params.push({ name, type, required: true });
+      input[name] = { type, required: true, index: index++ };
     }
 
-    return { params, variadic: false, acceptsKwargs: false, hasOptionsParam: false, returnType };
+    return { input, variadic: false, acceptsKwargs: false, hasOptionsParam: false, returnType };
   }
 
   private inferCpp(code: string, functionName: string) {
@@ -144,13 +145,14 @@ export class SignatureInferenceEngine {
     return this.inferC(code, functionName);
   }
 
-  private inferPython(code: string, functionName: string) {
+  private inferPython(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
     const match = code.match(new RegExp(`def\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
     if (!match) return null;
 
-    const params: ParamSchema[] = [];
+    const input: Record<string, JsonSchema & { index: number }> = {};
     let variadic = false;
     let acceptsKwargs = false;
+    let index = 0;
 
     for (const part of this.splitParams(match[1])) {
       const trimmed = part.trim();
@@ -163,19 +165,20 @@ export class SignatureInferenceEngine {
       } else if (trimmed !== '*') {
         const [nameWithType, defaultVal] = trimmed.split('=').map(s => s.trim());
         const name = nameWithType.split(':')[0].trim();
-        params.push({ name, required: !defaultVal });
+        input[name] = { required: !defaultVal, index: index++ };
       }
     }
 
-    return { params, variadic, acceptsKwargs, hasOptionsParam: false };
+    return { input, variadic, acceptsKwargs, hasOptionsParam: false };
   }
 
-  private inferPHP(code: string, functionName: string) {
+  private inferPHP(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
     const match = code.match(new RegExp(`function\\s+${functionName}\\s*\\(([^)]*)\\)`, 'm'));
     if (!match) return null;
 
-    const params: ParamSchema[] = [];
+    const input: Record<string, JsonSchema & { index: number }> = {};
     let variadic = false;
+    let index = 0;
 
     for (const part of this.splitParams(match[1])) {
       const trimmed = part.trim();
@@ -188,14 +191,14 @@ export class SignatureInferenceEngine {
         const parts = nameWithType.split(/\s+/);
         const nameWithDollar = parts[parts.length - 1];
         const name = nameWithDollar.startsWith('$') ? nameWithDollar.substring(1) : nameWithDollar;
-        params.push({ name, required: !defaultVal });
+        input[name] = { required: !defaultVal, index: index++ };
       }
     }
 
-    return { params, variadic, acceptsKwargs: true, hasOptionsParam: false };
+    return { input, variadic, acceptsKwargs: true, hasOptionsParam: false };
   }
 
-  private inferJavaScript(code: string, functionName: string) {
+  private inferJavaScript(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
     const patterns = [
       new RegExp(`function\\s+${functionName}\\s*\\(([^)]*)\\)`),
       new RegExp(`(?:const|let|var)\\s+${functionName}\\s*=\\s*(?:async\\s*)?\\(([^)]*)\\)\\s*=>`),
@@ -209,9 +212,10 @@ export class SignatureInferenceEngine {
     }
     if (!paramsStr) return null;
 
-    const params: ParamSchema[] = [];
+    const input: Record<string, JsonSchema & { index: number }> = {};
     let variadic = false;
     let hasOptionsParam = false;
+    let index = 0;
 
     const parts = this.splitParams(paramsStr);
     parts.forEach((part, i) => {
@@ -228,20 +232,21 @@ export class SignatureInferenceEngine {
         if (isLast && /^(options?|opts?|config|props|params)$/i.test(name)) {
           hasOptionsParam = true;
         }
-        params.push({ name, required: !trimmed.includes('=') });
+        input[name] = { required: !trimmed.includes('='), index: index++ };
       }
     });
 
-    return { params, variadic, acceptsKwargs: false, hasOptionsParam };
+    return { input, variadic, acceptsKwargs: false, hasOptionsParam };
   }
 
-  private inferRuby(code: string, functionName: string) {
+  private inferRuby(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
     const match = code.match(new RegExp(`def\\s+${functionName}\\s*(?:\\(([^)]*)\\))?`, 'm'));
     if (!match) return null;
 
-    const params: ParamSchema[] = [];
+    const input: Record<string, JsonSchema & { index: number }> = {};
     let variadic = false;
     let acceptsKwargs = false;
+    let index = 0;
 
     for (const part of this.splitParams(match[1] || '')) {
       const trimmed = part.trim();
@@ -251,21 +256,21 @@ export class SignatureInferenceEngine {
       else if (trimmed.startsWith('*')) variadic = true;
       else {
         const name = trimmed.split(/[=:]/)[0].trim();
-        params.push({ name, required: !trimmed.includes('=') && !trimmed.includes(':') });
+        input[name] = { required: !trimmed.includes('=') && !trimmed.includes(':'), index: index++ };
       }
     }
 
-    return { params, variadic, acceptsKwargs, hasOptionsParam: false };
+    return { input, variadic, acceptsKwargs, hasOptionsParam: false };
   }
 
   private getConvention(language: string): InferredSignature {
     const conventions: Record<string, InferredSignature> = {
-      python: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
-      ruby: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
-      php: { params: [], variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
-      quickjs: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: true, source: 'convention' },
-      clang: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
-      clangpp: { params: [], variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
+      python: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      ruby: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      php: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
+      quickjs: { input: {}, variadic: false, acceptsKwargs: false, hasOptionsParam: true, source: 'convention' },
+      clang: { input: {}, variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
+      clangpp: { input: {}, variadic: false, acceptsKwargs: false, hasOptionsParam: false, source: 'convention', returnType: 'int' },
     };
     return conventions[language];
   }

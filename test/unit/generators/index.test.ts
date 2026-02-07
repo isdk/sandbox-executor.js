@@ -72,7 +72,7 @@ describe('generators/index', () => {
             [],
             {},
             {
-              params: [],
+              input: {},
               variadic: false,
               acceptsKwargs: false,
               hasOptionsParam: false,

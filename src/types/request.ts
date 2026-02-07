@@ -90,6 +90,7 @@ export interface ExecutionResult<T = unknown> {
 
 /**
  * Schema definition for a single function parameter.
+ * @deprecated Use JsonSchema instead.
  */
 export interface ParamSchema {
   /** Parameter name */
@@ -102,18 +103,6 @@ export interface ParamSchema {
   default?: unknown;
   /** Description for documentation or AI hints */
   description?: string;
-}
-
-/**
- * Schema definition for a function.
- */
-export interface FunctionSchema {
-  /** Parameter schemas */
-  params?: ParamSchema[];
-  /** Whether the function accepts variable positional arguments */
-  variadic?: boolean;
-  /** Whether the function accepts keyword arguments */
-  acceptsKwargs?: boolean;
 }
 
 /**
@@ -132,9 +121,9 @@ export type SupportedLanguage =
   | 'clangpp';
 
 /**
- * Options for customizing the execution result.
+ * Options for customizing the reporting of execution results.
  */
-export interface ResultOptions {
+export interface ReportingOptions {
   /** Whether to include file changes in the result. Defaults to true. */
   includeChanges?: boolean;
   /** Whether to include file contents in the changes. Defaults to true. */
@@ -167,31 +156,33 @@ export type InputSchema =
   | Record<string, JsonSchema & { index?: number }>;
 
 /**
- * Options for customizing the invocation and execution behavior.
+ * Schema definition for a function interface.
  */
-export interface InvokeOptions {
-  /**
-   * Argument passing mode.
-   * - `stdin`: Pass arguments via standard input (safe for large data).
-   * - `inline`: Embed arguments directly in the generated code (faster for small data).
-   * - `auto`: Automatically choose based on data size. Defaults to 'auto'.
-   */
-  argsMode?: ArgsMode;
-  /**
-   * Threshold in bytes for switching from 'inline' to 'stdin' in 'auto' mode.
-   * Defaults to 102400 (100KB).
-   */
-  autoModeThreshold?: number;
-  /** Execution timeout in seconds. */
-  timeout?: number;
-  /** JSON Schema for validating input arguments. */
-  inputSchema?: InputSchema;
-  /** JSON Schema for validating the function return value. */
-  outputSchema?: any;
+export interface FunctionSchema {
+  /** Input parameter schemas. */
+  input?: InputSchema;
+  /** Schema for the function return value. */
+  output?: JsonSchema;
   /** Whether to enforce strict schema validation. */
   strict?: boolean;
-  /** Options for the result output. */
-  resultOptions?: ResultOptions;
+  /** Whether the function accepts variable positional arguments. */
+  variadic?: boolean;
+  /** Whether the function accepts keyword arguments. */
+  acceptsKwargs?: boolean;
+}
+
+/**
+ * Options for customizing the runtime environment and behavior.
+ */
+export interface InvokeOptions {
+  /** Optional configuration for mounting host directories. */
+  mount?: MountConfig;
+  /** Optional virtual files to seed in the sandbox. */
+  files?: Record<string, string | Uint8Array>;
+  /** Initial working directory in the sandbox. */
+  workdir?: string;
+  /** Options for reporting results. */
+  reporting?: ReportingOptions;
 }
 
 /**
@@ -215,30 +206,37 @@ export interface FunctionCallRequest {
    */
   args?: ArgumentItem[] | Record<string, ArgumentItem>;
   /**
+   * Execution timeout in seconds.
+   */
+  timeout?: number;
+  /**
+   * Argument passing mode.
+   * - `stdin`: Pass arguments via standard input (safe for large data).
+   * - `inline`: Embed arguments directly in the generated code (faster for small data).
+   * - `file`: Pass arguments via a temporary file (safe for large data).
+   * - `auto`: Automatically choose based on data size. Defaults to 'auto'.
+   */
+  argsMode?: ArgsMode;
+  /**
+   * Threshold in bytes for switching from 'inline' to 'stdin' in 'auto' mode.
+   * Defaults to 102400 (100KB).
+   */
+  autoModeThreshold?: number;
+  /** Optional schema for the function. If not provided, it will be inferred. */
+  schema?: FunctionSchema;
+  /** Execution options. */
+  options?: InvokeOptions;
+
+  /**
    * Keyword arguments to pass to the function.
    * @deprecated Use `args` as an object instead.
    */
   kwargs?: Record<string, any>;
-  /** Optional schema for the function. If not provided, it will be inferred. */
-  schema?: FunctionSchema;
-  /** Optional configuration for mounting host directories. */
-  mount?: MountConfig;
-  /** Optional virtual files to seed in the sandbox. */
-  files?: Record<string, string | Uint8Array>;
-  /** Initial working directory in the sandbox. */
-  workdir?: string;
-  /** Execution options. */
-  options?: InvokeOptions;
-  /**
-   * Execution timeout in seconds.
-   * @deprecated Use `options.timeout` instead.
-   */
-  timeout?: number;
   /**
    * Options for the result output.
-   * @deprecated Use `options.resultOptions` instead.
+   * @deprecated Use `options.reporting` instead.
    */
-  resultOptions?: ResultOptions;
+  resultOptions?: ReportingOptions;
 }
 
 /**

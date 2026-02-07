@@ -10,7 +10,7 @@ Sandbox Executor is designed to provide a high-level, function-centric API on to
 
 * **Standard I/O as Communication Bridge**: Use `stdin` for function input within the sandbox and `stdout` for function output. This design allows the executor to support any programming language and facilitates easier replacement or iteration of the underlying sandbox library.
 * **SIP (Sandbox Input Protocol)**: To ensure robustness and future extensibility, input uses a length-prefix protocol:
-  * **1st Byte**: Mode (`'A'` for Atomic, `'P'` for Persistent).
+  * **1st Byte**: Mode (`'A'` for Atomic, `'S'` for Stream, `'P'` for Persistent).
   * **Bytes 2-9**: 8-character hex-encoded string representing the length of the JSON payload.
   * **Subsequent Bytes**: JSON call request (containing `functionName`, `args`, `kwargs`, etc.).
   * **Note**: We use hex-encoded length because the underlying `runFS` `stdin` only supports strings. Binary length bytes could be corrupted or change size during UTF-8 encoding. Hex ensures ASCII safety.
@@ -84,6 +84,17 @@ When generating C code from JavaScript strings, `\n` and `\0` can be double-proc
 
 * **Fix**: Use raw strings or carefully controlled escaping in templates. Ensure the `cJSON` printer uses a large enough dynamic buffer (8KB+) to prevent memory corruption when serializing complex results.
 
+#### 6. API Ergonomics & Leveling (V0.2 New)
+
+Previously, `FunctionCallRequest` was cluttered with mixed levels of concerns.
+* **Refining Levels**: Common execution parameters like `timeout` and `argsMode` were moved to the root request to improve developer experience. Environment-specific settings like `mount`, `files`, and `workdir` were grouped into an `options` object.
+* **Reporting rename**: `resultOptions` was renamed to `reporting` to better reflect its purpose: controlling what metadata the sandbox reports back.
+
+#### 7. Schema Unification & C Dispatching (V0.2 New)
+
+* **InputSchema**: We moved from `ParamSchema[]` to `InputSchema` (Record or Array of JsonSchema) to better support AI tool calls.
+* **C Generator Dispatching**: Since `input` can now be a Record, the C generator must sort parameters by their `index` property to ensure the correct positional call order in the generated dispatcher. This is critical for languages without native reflection.
+
 ### Core Components
 
 1. **`SandboxExecutor` (src/executor.ts)**: The main entry point. It orchestrates the entire execution lifecycle:
@@ -96,15 +107,15 @@ When generating C code from JavaScript strings, `\n` and `\0` can be double-proc
 2. **Code Generators (src/generators/)**:
     * Each language has a `CodeGenerator` implementing `generateFiles` and `generateStdin`.
     * The proxy program reads the SIP packet from `stdin`, parses it, calls the target function, and serializes the result to `stdout`.
-    * **Static Proxy with Dynamic Dispatch**: For languages without reflection (e.g., C/C++), the generator dynamically creates a `dispatcher` glue layer to handle function routing.
+    * **Static Proxy with Dynamic Dispatch**: For languages without reflection (e.g., C/C++), the generator dynamically creates a `dispatcher` glue layer to handle function routing based on `signature.input`.
 
 3. **Signature Inference (src/inference/engine.ts)**:
     * Uses static analysis (regex-based) and language conventions to determine function parameters.
-    * This allows the executor to correctly map `args` and `kwargs` to the underlying language's function call syntax.
+    * Resolves signatures into `InferredSignature` with an `input: InputSchema`.
 
 4. **File System Management (src/fs/)**:
     * **`FSBuilder`**: Constructs the initial `WASIFS` object.
-    * **`FileSystemDiffer`**: Handles change detection by taking a snapshot before execution and comparing it with the result from the WASM runtime. This snapshot-based approach ensures compatibility with WASM workers where `Proxy` objects cannot be cloned.
+    * **`FileSystemDiffer`**: Handles change detection by taking a snapshot before execution and comparing it with the result from the WASM runtime. This snapshot-based approach ensures compatibility with WASM workers where `Proxy` objects cannot be cloned (Structured Clone Algorithm limitation).
     * **`SyncManager`**: Synchronizes changes from the virtual file system back to the host disk, enforcing configured permissions.
     * **`PermissionResolver`**: Evaluates glob-based rules to allow or deny file operations.
 
@@ -140,7 +151,7 @@ pnpm test
 # Run tests with coverage
 pnpm test:coverage
 
-# Run integration tests only (requires network/WASM runtimes)
+# Run integration tests only (requires network/runno environments)
 npx vitest test/integration
 ```
 
@@ -151,27 +162,27 @@ To add a new language, you need to follow these steps:
 1. **Add Language Type**: Update `SupportedLanguage` in `src/types/request.ts`.
 2. **Implement Generator**: Create `src/generators/<language>.ts` extending `CodeGenerator`.
     * Implement `generateWrapper`: Create the code that calls the user function and prints JSON output between markers.
-    * Implement `serialize`: How to convert JS types to the target language literals.
+    * Implement `serialize`: How to convert JS types to the target language literals for `inline` mode.
 3. **Register Generator**: Add your generator to the map in `src/generators/index.ts`.
-    * If the Runno runtime name differs from your language name (e.g., `php` -> `php-cgi`), update `getRuntime`.
+    * **Runtime Mapping**: If the Runno runtime name differs from your language name (e.g., `php` -> `php-cgi`), update `getRuntime`.
     * **Note for C/C++**: The current sandbox environment for `clang` and `clangpp` has some limitations:
         * **Exceptions**: Exceptions are disabled. Do not use `try-catch` blocks in the wrapper code.
         * **Standard**: Use C++11 compatible code. Avoid C++14/17/20 features like `if constexpr` or type trait variables (e.g., `is_same_v`). Use traditional template specialization and `std::enable_if` if needed.
 4. **Add Inference Logic**: Update `src/inference/engine.ts`.
-    * Implement an `infer<Language>` method to parse function signatures.
+    * Implement an `infer<Language>` method to parse function signatures into `InputSchema`.
     * Update `getConvention` with default behavior for the new language.
 5. **Add Tests**:
     * Unit test for the generator in `test/unit/generators/`.
     * Inference tests in `test/unit/inference-engine.test.ts`.
-    * Integration test in `test/integration/real-environment.test.ts`.
+    * Integration test in `test/integration/executor.test.ts` and `test/integration/real-environment.test.ts`.
 
 ## 📁 File System Tracking Details
 
-Previously, we used a `Proxy`-based approach (`TrackedFileSystem`). However, because `@runno/sandbox` executes WASM in a Worker, the file system object must be cloned via the Structured Clone Algorithm. Since `Proxy` objects cannot be cloned, we switched to `FileSystemDiffer`.
+Previously, we used a `Proxy`-based approach (`TrackedFileSystem`). However, because `@runno/sandbox` executes WASM in a Worker, the file system object must be cloned via the **Structured Clone Algorithm**. Since **`Proxy` objects cannot be cloned**, we switched to `FileSystemDiffer`.
 
 `FileSystemDiffer` works by:
 
-1. Taking a deep copy of the `WASIFS` before execution.
+1. Taking a **deep copy (snapshot)** of the `WASIFS` before execution.
 2. Passing the plain `WASIFS` object to the sandbox.
 3. Comparing the returned `WASIFS` from the sandbox with the initial snapshot.
 

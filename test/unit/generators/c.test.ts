@@ -7,10 +7,10 @@ describe('CGenerator', () => {
   const generator = new CGenerator();
 
   const signature: InferredSignature = {
-    params: [
-      { name: 'a', type: 'number' },
-      { name: 'b', type: 'number' }
-    ],
+    input: {
+      a: { type: 'number', index: 0 },
+      b: { type: 'number', index: 1 }
+    },
     variadic: false,
     acceptsKwargs: false,
     hasOptionsParam: false,

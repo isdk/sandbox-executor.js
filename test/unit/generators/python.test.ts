@@ -7,7 +7,7 @@ describe('PythonGenerator', () => {
   const generator = new PythonGenerator();
 
   const defaultSignature: InferredSignature = {
-    params: [],
+    input: {},
     variadic: true,
     acceptsKwargs: true,
     hasOptionsParam: false,

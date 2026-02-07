@@ -7,7 +7,7 @@ describe('PHPCgiGenerator', () => {
   const generator = new PHPCgiGenerator();
 
   const defaultSignature: InferredSignature = {
-    params: [],
+    input: {},
     variadic: true,
     acceptsKwargs: true,
     hasOptionsParam: false,

@@ -10,10 +10,10 @@ describe('SignatureInferenceEngine', () => {
   describe('优先级 1: Schema', () => {
     it('应该优先使用用户提供的 schema', () => {
       const schema: FunctionSchema = {
-        params: [
-          { name: 'x', type: 'number', required: true },
-          { name: 'y', type: 'number', required: false },
-        ],
+        input: {
+          x: { type: 'number', required: true, index: 0 },
+          y: { type: 'number', required: false, index: 1 },
+        },
         variadic: false,
         acceptsKwargs: false,
       };
@@ -21,7 +21,7 @@ describe('SignatureInferenceEngine', () => {
       const result = engine.resolve('def func(): pass', 'func', 'python', schema);
 
       expect(result.source).toBe('schema');
-      expect(result.params).toEqual(schema.params);
+      expect(result.input).toEqual(schema.input);
       expect(result.variadic).toBe(false);
     });
   });
@@ -32,18 +32,20 @@ describe('SignatureInferenceEngine', () => {
       const result = engine.resolve(code, 'add', 'python');
 
       expect(result.source).toBe('inferred');
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
-      expect(result.params[1].name).toBe('b');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
+      expect((result.input as any)['a'].index).toBe(0);
+      expect(result.input['b']).toBeDefined();
+      expect((result.input as any)['b'].index).toBe(1);
     });
 
     it('应该推断带默认值的参数', () => {
       const code = 'def greet(name, greeting="Hello"): pass';
       const result = engine.resolve(code, 'greet', 'python');
 
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].required).toBe(true);
-      expect(result.params[1].required).toBe(false);
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['name'].required).toBe(true);
+      expect(result.input['greeting'].required).toBe(false);
     });
 
     it('应该识别 *args', () => {
@@ -75,17 +77,17 @@ class MyClass:
       `;
       const result = engine.resolve(code, 'method', 'python');
 
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
     });
 
     it('应该处理类型注解', () => {
       const code = 'def func(a: int, b: str = "default") -> bool: pass';
       const result = engine.resolve(code, 'func', 'python');
 
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
-      expect(result.params[1].name).toBe('b');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
+      expect(result.input['b']).toBeDefined();
     });
   });
 
@@ -95,21 +97,21 @@ class MyClass:
       const result = engine.resolve(code, 'add', 'quickjs');
 
       expect(result.source).toBe('inferred');
-      expect(result.params).toHaveLength(2);
+      expect(Object.keys(result.input)).toHaveLength(2);
     });
 
     it('应该推断箭头函数', () => {
       const code = 'const add = (a, b) => a + b;';
       const result = engine.resolve(code, 'add', 'quickjs');
 
-      expect(result.params).toHaveLength(2);
+      expect(Object.keys(result.input)).toHaveLength(2);
     });
 
     it('应该推断 async 箭头函数', () => {
       const code = 'const fetchData = async (url, options) => {};';
       const result = engine.resolve(code, 'fetchData', 'quickjs');
 
-      expect(result.params).toHaveLength(2);
+      expect(Object.keys(result.input)).toHaveLength(2);
     });
 
     it('应该识别 options 参数名', () => {
@@ -147,14 +149,14 @@ class MyClass:
       const result = engine.resolve(code, 'add', 'ruby');
 
       expect(result.source).toBe('inferred');
-      expect(result.params).toHaveLength(2);
+      expect(Object.keys(result.input)).toHaveLength(2);
     });
 
     it('应该识别关键字参数', () => {
       const code = 'def greet(name:, greeting: "Hello")\nend';
       const result = engine.resolve(code, 'greet', 'ruby');
 
-      expect(result.params.length).toBeGreaterThan(0);
+      expect(Object.keys(result.input).length).toBeGreaterThan(0);
     });
 
     it('应该识别 **kwargs', () => {
@@ -171,18 +173,18 @@ class MyClass:
       const result = engine.resolve(code, 'add', 'php');
 
       expect(result.source).toBe('inferred');
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
-      expect(result.params[1].name).toBe('b');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
+      expect(result.input['b']).toBeDefined();
     });
 
     it('应该推断带默认值的参数', () => {
       const code = 'function greet($name, $greeting = "Hello") {}';
       const result = engine.resolve(code, 'greet', 'php');
 
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].required).toBe(true);
-      expect(result.params[1].required).toBe(false);
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['name'].required).toBe(true);
+      expect(result.input['greeting'].required).toBe(false);
     });
 
     it('应该识别 variadic 参数 (...$args)', () => {
@@ -196,9 +198,9 @@ class MyClass:
       const code = 'function func(int $a, ?string $b = null) {}';
       const result = engine.resolve(code, 'func', 'php');
 
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
-      expect(result.params[1].name).toBe('b');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
+      expect(result.input['b']).toBeDefined();
     });
   });
 
@@ -209,9 +211,9 @@ class MyClass:
 
       expect(result.source).toBe('inferred');
       expect(result.returnType).toBe('int');
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('a');
-      expect(result.params[1].name).toBe('b');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['a']).toBeDefined();
+      expect(result.input['b']).toBeDefined();
     });
 
     it('应该推断带指针的 C 函数', () => {
@@ -219,8 +221,8 @@ class MyClass:
       const result = engine.resolve(code, 'greet', 'c');
 
       expect(result.returnType).toBe('char*');
-      expect(result.params).toHaveLength(1);
-      expect(result.params[0].name).toBe('name');
+      expect(Object.keys(result.input)).toHaveLength(1);
+      expect(result.input['name']).toBeDefined();
     });
   });
 
@@ -231,8 +233,8 @@ class MyClass:
 
       expect(result.source).toBe('inferred');
       expect(result.returnType).toBe('double');
-      expect(result.params).toHaveLength(2);
-      expect(result.params[0].name).toBe('x');
+      expect(Object.keys(result.input)).toHaveLength(2);
+      expect(result.input['x']).toBeDefined();
     });
   });
 
@@ -309,7 +311,7 @@ def another():
       const result = engine.resolve(code, 'target', 'python');
 
       expect(result.source).toBe('inferred');
-      expect(result.params).toHaveLength(3);
+      expect(Object.keys(result.input)).toHaveLength(3);
     });
   });
 });

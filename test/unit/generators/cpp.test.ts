@@ -7,9 +7,9 @@ describe('CppGenerator', () => {
   const generator = new CppGenerator();
 
   const signature: InferredSignature = {
-    params: [
-      { name: 's', type: 'string' }
-    ],
+    input: {
+      s: { type: 'string', index: 0 }
+    },
     variadic: false,
     acceptsKwargs: false,
     hasOptionsParam: false,

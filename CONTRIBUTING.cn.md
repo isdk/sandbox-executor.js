@@ -10,11 +10,11 @@ Sandbox Executor 旨在为基于 WebAssembly 的沙盒提供高级的、以函�
 
 * **标准 I/O 作为通信桥梁**: 使用 `stdin` 作为沙盒内的函数输入，`stdout` 作为函数输出。这种设计使得执行器能够支持任意编程语言，并能更方便地对实际沙盒库进行更换或迭代。
 * **SIP (Sandbox Input Protocol)**: 为了确保鲁棒性和未来扩展性，输入采用长度前缀协议：
-  * **第 1 字节**: 模式（`'A'` 代表原子模式，`'P'` 代表持久模式）。
+  * **第 1 字节**: 模式（`'A'` 代表原子模式，`'S'` 代表流模式，`'P'` 代表持久模式）。
   * **第 2-9 字节**: 8 字符的十六进制字符串，表示 JSON 负载的字节长度。
   * **后续字节**: JSON 格式的调用请求（包含 `functionName`, `args`, `kwargs` 等）。
   * **注意**: 使用十六进制编码长度是因为底层 `runFS` 的 `stdin` 仅支持字符串。二进制长度字节在 UTF-8 编码过程中可能会被损坏或导致长度变化。十六进制确保了 ASCII 安全。
-* **代理/用户代码分离**: 每种语言都由一个 `main` 代理程序负责处理 SIP 协议，并动态加载存放用户逻辑的 `user_code` 文件。
+* **Proxy/User-Code Separation**: 每种语言都由一个 `main` 代理程序负责处理 SIP 协议，并动态加载存放用户逻辑的 `user_code` 文件。
 
 ### 🏗️ 参数传递机制
 
@@ -80,9 +80,20 @@ Sandbox Executor 旨在为基于 WebAssembly 的沙盒提供高级的、以函�
 
 #### 5. C 模板中的字符串转义
 
-从 JavaScript 字符串生成 C 代码时，`\n` 和 `\0` 可能会被二次处理。
+从 JavaScript 字符串生成 C 代码时，`\n` and `\0` 可能会被二次处理。
 
 * **修复**: 在模板中使用原始字符串或仔细控制转义。确保 `cJSON` 打印机使用足够大的动态缓冲区（8KB+），以防止序列化复杂结果时发生内存损坏。
+
+#### 6. API 层级与易用性 (V0.2 新心得)
+
+此前，`FunctionCallRequest` 混合了不同层级的关注点。
+* **精化层级**：我们将常用的执行参数（如 `timeout` 和 `argsMode`）提升到根请求中，以提升开发体验。而将环境相关的配置（如 `mount`、`files` 和 `workdir`）统一归类到 `options` 对象中。
+* **Reporting 重命名**：将 `resultOptions` 重命名为 `reporting`，更准确地表达了其“控制沙盒反馈哪些元数据”的初衷。
+
+#### 7. Schema 归一化与 C 分发器排序 (V0.2 新心得)
+
+* **InputSchema**：我们从简单的 `ParamSchema[]` 数组转向了更强大的 `InputSchema`（Record 或 JsonSchema 数组），以更好地适配 AI 工具调用。
+* **C 生成器分发逻辑**：由于 `input` 现在可以是键值对对象，C 生成器必须在生成 `dispatcher` 时根据参数的 `index` 属性进行排序，以确保在不支持反射的语言中能按正确的物理顺序进行位置参数调用。
 
 ### 核心组件
 
@@ -96,15 +107,15 @@ Sandbox Executor 旨在为基于 WebAssembly 的沙盒提供高级的、以函�
 2. **代码生成器 (src/generators/)**:
     * 每种语言都有一个 `CodeGenerator`，实现 `generateFiles` 和 `generateStdin`。
     * 代理程序负责从 `stdin` 读取 SIP 包，解析并调用目标函数，将结果序列化到 `stdout`。
-    * **静态代理与动态转发**: 对于不支持反射的语言（如 C/C++），生成器会动态生成一个 `dispatcher` 胶水层来处理函数分发。
+    * **静态代理与动态转发**: 对于不支持反射的语言（如 C/C++），生成器会根据 `signature.input` 动态生成一个 `dispatcher` 胶水层来处理函数分发。
 
 3. **签名推断 (src/inference/engine.ts)**:
     * 使用静态分析（基于正则）和语言约定来确定函数参数。
-    * 这使得执行器能够正确地将 `args` 和 `kwargs` 映射到底层语言的函数调用语法。
+    * 解析签名并输出包含 `input: InputSchema` 的 `InferredSignature`。
 
 4. **文件系统管理 (src/fs/)**:
     * **`FSBuilder`**: 构建初始的 `WASIFS` 对象。
-    * **`FileSystemDiffer`**: 通过在执行前拍摄快照并与 WASM 运行时的结果进行对比来处理变更检测。这种基于快照的方法确保了与 WASM Worker 的兼容性（Proxy 对象无法被克隆）。
+    * **`FileSystemDiffer`**: 通过在执行前拍摄快照（Snapshot）并与 WASM 运行时的结果进行对比来处理变更检测。这种基于快照的方法确保了与 WASM Worker 的兼容性（Proxy 对象无法被结构化克隆算法克隆）。
     * **`SyncManager`**: 将虚拟文件系统的变更同步回真实磁盘，并执行配置的权限。
     * **`PermissionResolver`**: 计算基于 glob 的规则以允许或拒绝文件操作。
 
@@ -140,7 +151,7 @@ pnpm test
 # 运行测试并查看覆盖率
 pnpm test:coverage
 
-# 仅运行集成测试（需要网络/WASM 运行时）
+# 仅运行集成测试（需要网络/runno 环境）
 npx vitest test/integration
 ```
 
@@ -153,26 +164,25 @@ npx vitest test/integration
     * 实现 `generateWrapper`: 创建调用用户函数并在标记之间打印 JSON 输出的代码。
     * 实现 `serialize`: 如何将 JS 类型转换为目标语言的字面量。
 3. **注册生成器**: 将你的生成器添加到 `src/generators/index.ts` 中的映射中。
-    * 如果 Runno 的运行时名称与你的语言名称不同（例如 `php` -> `php-cgi`），请更新 `getRuntime`。
+    * **运行时映射**: 如果 Runno 的运行时名称与你的语言名称不同（例如 `php` -> `php-cgi`），请更新 `getRuntime`。
     * **C/C++ 注意事项**: 当前沙盒环境中的 `clang` 和 `clangpp` 存在一些限制：
         * **异常**: 异常已被禁用。不要在包装代码中使用 `try-catch` 块。
         * **标准**: 使用兼容 C++11 的代码。避免使用 C++14/17/20 的特性，如 `if constexpr` 或类型特征变量（如 `is_same_v`）。如果需要，请使用传统的模板特化和 `std::enable_if`。
 4. **添加推断逻辑**: 更新 `src/inference/engine.ts`。
-    * 实现 `infer<Language>` 方法来解析函数签名。
+    * 实现 `infer<Language>` 方法，将函数签名解析为 `InputSchema`。
     * 使用新语言的默认行为更新 `getConvention`。
 5. **添加测试**:
     * 在 `test/unit/generators/` 中添加生成器的单元测试。
     * 在 `test/unit/inference-engine.test.ts` 中添加推断测试。
-    * 在 `test/integration/real-environment.test.ts` 中添加集成测试。
+    * 在 `test/integration/executor.test.ts` 和 `test/integration/real-environment.test.ts` 中添加集成测试。
 
 ## 📁 文件系统追踪详情
 
-之前，我们使用基于 `Proxy` 的方法 (`TrackedFileSystem`)。但是，由于 `@runno/sandbox` 在 Worker 中执行 WASM，文件系统对象必须通过结构化克隆算法进行克隆。由于 `Proxy` 对象无法被克隆，我们切换到了 `FileSystemDiffer`。
+之前，我们尝试过基于 `Proxy` 的方法 (`TrackedFileSystem`)。但是，由于 `@runno/sandbox` 在 Worker 中执行 WASM，文件系统对象必须通过**结构化克隆算法 (Structured Clone Algorithm)** 进行克隆。由于 **`Proxy` 对象无法被克隆**，我们切换到了 `FileSystemDiffer`。
 
 `FileSystemDiffer` 的工作原理：
-
-1. 在执行前对 `WASIFS` 进行深拷贝。
-2. 将纯 `WASIFS` 对象传递给沙盒。
+1. 在执行前对 `WASIFS` 进行**深度拷贝（Snapshot）**。
+2. 将纯 `WASIFS` 对象传递给沙盒执行。
 3. 将沙盒返回的 `WASIFS` 与初始快照进行对比。
 
-这种方法对于跨线程通信更加健壮，并确保捕获所有变更（包括 WASI 运行时本身所做的变更）。
+这种方法对于跨线程通信更加健壮，并能确保捕获所有变更（包括 WASI 运行时本身所做的变更）。

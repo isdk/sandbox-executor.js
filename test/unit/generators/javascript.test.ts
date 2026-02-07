@@ -7,7 +7,7 @@ describe('JavaScriptGenerator', () => {
   const generator = new JavaScriptGenerator();
 
   const defaultSignature: InferredSignature = {
-    params: [],
+    input: {},
     variadic: true,
     acceptsKwargs: true,
     hasOptionsParam: false,

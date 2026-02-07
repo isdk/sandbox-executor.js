@@ -75,7 +75,21 @@ export class CGenerator extends CodeGenerator {
   }
 
   protected generateDispatcher(functionName: string, signature: InferredSignature): string {
-    const params = signature.params || [];
+    const input = signature.input;
+    const params: (JsonSchema & { name: string })[] = [];
+
+    if (Array.isArray(input)) {
+      input.forEach((schema, idx) => {
+        params.push({ ...schema, name: (schema as any).name || `arg_${idx}` });
+      });
+    } else {
+      Object.entries(input)
+        .sort((a, b) => (a[1].index ?? 0) - (b[1].index ?? 0))
+        .forEach(([name, schema]) => {
+          params.push({ ...schema, name });
+        });
+    }
+
     let extractParamsCode = '';
     const callArgs: string[] = [];
 
