@@ -4,8 +4,8 @@ import type { InvokeOptions, ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
 export class CGenerator extends CodeGenerator {
-  readonly language = 'clang';
-  readonly fileExtension = '.c';
+  language = 'clang';
+  fileExtension = '.c';
 
   supportedArgsModes(): ArgsMode[] {
     return ['stdin', 'inline', 'file'];
@@ -25,7 +25,7 @@ export class CGenerator extends CodeGenerator {
       [`user_code${this.fileExtension}`]: userCode,
       [`__sandbox_dispatcher${this.fileExtension}`]: dispatcher,
       [`cJSON.h`]: this.getTemplate('cJSON', '.h'),
-      // Use the language's native extension for the cJSON implementation if possible, 
+      // Use the language's native extension for the cJSON implementation if possible,
       // otherwise fallback to .c from common
       [`cJSON${this.fileExtension}`]: this.getTemplate('cJSON', '.c'),
     };
@@ -54,7 +54,7 @@ export class CGenerator extends CodeGenerator {
     files[`main${this.fileExtension}`] = mainContent
       .replace(/#include "cJSON\.c"/g, `#include "cJSON${this.fileExtension}"`)
       .replace(/#include "__sandbox_dispatcher\.c"/g, `#include "__sandbox_dispatcher${this.fileExtension}"`);
-    
+
     return files;
   }
 
@@ -83,7 +83,7 @@ export class CGenerator extends CodeGenerator {
       const argName = `arg_${idx}`;
       callArgs.push(argName);
       let extraction = '';
-      
+
       const type = param.type || 'number';
       if (type === 'number') {
         extraction = `double ${argName} = cJSON_GetArrayItem(args, ${idx})->valuedouble;`;
@@ -94,13 +94,13 @@ export class CGenerator extends CodeGenerator {
       } else {
         extraction = `double ${argName} = cJSON_GetArrayItem(args, ${idx})->valuedouble;`;
       }
-      
+
       extractParamsCode += `    ${extraction}\n`;
     });
 
     const returnType = ((signature as any).returnType || 'double').toLowerCase();
     let callAndReturnCode = '';
-    
+
     if (returnType.includes('void')) {
       callAndReturnCode = `
     ${functionName}(${callArgs.join(', ')});

@@ -1,6 +1,6 @@
 import { CGenerator } from './c';
 import type { InferredSignature } from '../inference/engine';
-import type { InvokeOptions, ArgsMode } from '../types/request';
+import type { ArgsMode } from '../types/request';
 
 export class CppGenerator extends CGenerator {
   readonly language = 'clangpp';
@@ -16,7 +16,7 @@ export class CppGenerator extends CGenerator {
    */
   protected generateDispatcher(functionName: string, signature: InferredSignature): string {
     const dispatcher = super.generateDispatcher(functionName, signature);
-    
+
     const cppHelper = `
 #ifdef __cplusplus
 #include <string>
@@ -26,7 +26,7 @@ static inline cJSON* cJSON_CreateString(const std::string& s) {
 }
 #endif
 `;
-    
+
     return dispatcher
       .replace('#include "user_code.c"', '#include "user_code.cpp"')
       .replace('#include "cJSON.h"', `#include "cJSON.h"\n${cppHelper}`);
