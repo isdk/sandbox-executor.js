@@ -15,7 +15,6 @@ import type {
   AfterSyncEventData,
   ArgsMode,
   InvokeOptions,
-  ReportingOptions,
 } from './types';
 
 import { PermissionResolver } from './fs/permission-resolver';
@@ -109,7 +108,7 @@ export class SandboxExecutor extends EventEmitter {
 
       // 2. 规范化选项
       const normalizedRequest = this.normalizeOptions(request);
-      
+
       // 3. 规范化参数
       const { args, kwargs } = this.normalizeArguments(request, signature);
 
@@ -232,7 +231,7 @@ export class SandboxExecutor extends EventEmitter {
    */
   private normalizeOptions(request: FunctionCallRequest): FunctionCallRequest {
     const normalized = { ...request };
-    
+
     // 兼容逻辑：处理弃用字段和层级迁移
     normalized.timeout = request.timeout ?? request.options?.timeout;
     normalized.argsMode = request.argsMode ?? request.options?.argsMode ?? 'auto';
@@ -240,7 +239,7 @@ export class SandboxExecutor extends EventEmitter {
 
     const options: InvokeOptions = { ...request.options };
     options.reporting = options.reporting ?? (request.resultOptions as any);
-    
+
     normalized.options = options;
     return normalized;
   }
@@ -313,34 +312,34 @@ export class SandboxExecutor extends EventEmitter {
   ): ArgsMode {
     const supported = generator.supportedArgsModes();
     const mode = request.argsMode || 'auto';
-    
+
     if (mode === 'inline' && supported.includes('inline')) return 'inline';
     if (mode === 'file' && supported.includes('file')) return 'file';
     if (mode === 'stdin' && supported.includes('stdin')) return 'stdin';
-    
+
     if (mode === 'auto') {
       const size = this.calculateDataSize(args) + this.calculateDataSize(kwargs);
-      
+
       // 1. Very small data -> inline (fastest)
       if (size < 4096 && supported.includes('inline')) {
         return 'inline';
       }
-      
+
       // 2. Medium data -> stdin (standard)
       if (size < 8192 && supported.includes('stdin')) {
         return 'stdin';
       }
-      
+
       // 3. Large data -> file (safe and robust via VFS)
       if (supported.includes('file')) {
         return 'file';
       }
-      
+
       // Fallback to whatever is supported
       if (supported.includes('stdin')) return 'stdin';
       if (supported.includes('inline')) return 'inline';
     }
-    
+
     return 'stdin';
   }
 

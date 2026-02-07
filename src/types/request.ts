@@ -183,6 +183,13 @@ export interface InvokeOptions {
   workdir?: string;
   /** Options for reporting results. */
   reporting?: ReportingOptions;
+
+  /** @deprecated Use root request.argsMode instead. */
+  argsMode?: ArgsMode;
+  /** @deprecated Use root request.autoModeThreshold instead. */
+  autoModeThreshold?: number;
+  /** @deprecated Use root request.timeout instead. */
+  timeout?: number;
 }
 
 /**
