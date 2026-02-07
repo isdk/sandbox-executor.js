@@ -1,6 +1,6 @@
 import { CodeGenerator } from './base';
 import type { InferredSignature } from '../inference/engine';
-import type { InvokeOptions, ArgsMode } from '../types/request';
+import type { InvokeOptions, ArgsMode, JsonSchema } from '../types/request';
 import { Serializer } from './utils/serializer';
 
 export class CGenerator extends CodeGenerator {
