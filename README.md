@@ -4,6 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 
+> 【English|[中文](./README.cn.md)】
+---
+
 A powerful, type-safe library for executing functions in isolated sandbox environments across multiple programming languages. Built on top of [@runno/sandbox](https://runno.dev/) with WebAssembly-based isolation.
 
 ## ✨ Features

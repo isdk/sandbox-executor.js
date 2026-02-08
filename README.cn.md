@@ -4,6 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 
+> 【[English](./README.md)|中文】
+---
+
 一个强大的、类型安全的沙盒函数执行库，支持多种编程语言。基于 [@runno/sandbox](https://runno.dev/) 构建，使用 WebAssembly 实现安全隔离。
 
 ## ✨ 特性
