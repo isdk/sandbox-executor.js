@@ -27,13 +27,14 @@ describe('PythonGenerator', () => {
   describe('generateFiles', () => {
     it('应该生成包含 main.py 和 user_code.py 的文件映射', () => {
       const userCode = 'def add(a, b): return a + b';
-      const files = generator.generateFiles(
-        userCode,
-        'add',
-        [1, 2],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
 
       expect(files['main.py']).toBeDefined();
       expect(files['user_code.py']).toBe(userCode);
@@ -51,7 +52,13 @@ describe('PythonGenerator', () => {
       const args = [1, 2];
       const kwargs = { greeting: 'hello' };
       
-      const stdin = generator.generateStdin(functionName, args, kwargs) as string;
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName,
+        args,
+        kwargs,
+        argsMode: 'stdin'
+      }) as string;
       
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
       

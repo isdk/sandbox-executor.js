@@ -198,24 +198,13 @@ export interface InvokeOptions {
 export type ArgumentItem = any | { index: number; value: any };
 
 /**
- * Request object for executing a function call in the sandbox.
+ * Base properties for a function call request.
  */
-export interface FunctionCallRequest {
-  /** The programming language of the code. */
-  language: SupportedLanguage;
+export interface BaseFunctionRequest {
   /** The source code containing the function. */
   code: string;
   /** The name of the function to call. */
   functionName: string;
-  /**
-   * Arguments to pass to the function.
-   * Can be an array (positional) or an object (keyword/mixed).
-   */
-  args?: ArgumentItem[] | Record<string, ArgumentItem>;
-  /**
-   * Execution timeout in seconds.
-   */
-  timeout?: number;
   /**
    * Argument passing mode.
    * - `stdin`: Pass arguments via standard input (safe for large data).
@@ -229,6 +218,23 @@ export interface FunctionCallRequest {
    * Defaults to 102400 (100KB).
    */
   autoModeThreshold?: number;
+  /**
+   * Execution timeout in seconds.
+   */
+  timeout?: number;
+}
+
+/**
+ * Request object for executing a function call in the sandbox.
+ */
+export interface FunctionCallRequest extends BaseFunctionRequest {
+  /** The programming language of the code. */
+  language: SupportedLanguage;
+  /**
+   * Arguments to pass to the function.
+   * Can be an array (positional) or an object (keyword/mixed).
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
   /** Optional schema for the function. If not provided, it will be inferred. */
   schema?: FunctionSchema;
   /** Execution options. */

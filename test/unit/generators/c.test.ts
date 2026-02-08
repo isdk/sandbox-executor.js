@@ -21,13 +21,14 @@ describe('CGenerator', () => {
   describe('generateFiles', () => {
     it('应该生成 C 代理及相关支持文件', () => {
       const userCode = 'int add(int a, int b) { return a + b; }';
-      const files = generator.generateFiles(
-        userCode,
-        'add',
-        [1, 2],
-        {},
-        signature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        signature,
+        argsMode: 'stdin',
+      });
 
       expect(files['main.c']).toBeDefined();
       expect(files['user_code.c']).toBe(userCode);
@@ -43,7 +44,13 @@ describe('CGenerator', () => {
 
   describe('generateStdin', () => {
     it('应该生成正确的 Stdin', () => {
-      const stdin = generator.generateStdin('add', [1, 2], {}) as string;
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        argsMode: 'stdin'
+      }) as string;
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
       const request = JSON.parse(stdin.substring(9));
       expect(request.functionName).toBe('add');

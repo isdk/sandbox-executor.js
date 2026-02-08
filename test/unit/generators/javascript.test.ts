@@ -27,13 +27,14 @@ describe('JavaScriptGenerator', () => {
   describe('generateFiles', () => {
     it('应该生成包含 main.js 和 user_code.js 的文件映射', () => {
       const userCode = 'function add(a, b) { return a + b; }';
-      const files = generator.generateFiles(
-        userCode,
-        'add',
-        [1, 2],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
       expect(files['main.js']).toBeDefined();
       expect(files['user_code.js']).toContain('export function add');
       const proxyCode = files['main.js'] as string;
@@ -43,13 +44,14 @@ describe('JavaScriptGenerator', () => {
 
     it('应该能够识别并添加 export', () => {
       const userCode = 'const myFunc = (a) => a';
-      const files = generator.generateFiles(
-        userCode,
-        'myFunc',
-        [1],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'myFunc',
+        args: [1],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
       expect(files['user_code.js']).toContain('export const myFunc');
     });
   });
@@ -60,7 +62,13 @@ describe('JavaScriptGenerator', () => {
       const args = [10, 20];
       const kwargs = { mode: 'fast' };
 
-      const stdin = generator.generateStdin(functionName, args, kwargs) as string;
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName,
+        args,
+        kwargs,
+        argsMode: 'stdin'
+      }) as string;
 
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
 

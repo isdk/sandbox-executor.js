@@ -27,13 +27,14 @@ describe('RubyGenerator', () => {
   describe('generateFiles', () => {
     it('应该生成包含 main.rb 和 user_code.rb 的文件映射', () => {
       const userCode = 'def add(a, b); a + b; end';
-      const files = generator.generateFiles(
-        userCode,
-        'add',
-        [1, 2],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
 
       expect(files['main.rb']).toBeDefined();
       expect(files['user_code.rb']).toBe(userCode);
@@ -51,7 +52,13 @@ describe('RubyGenerator', () => {
       const args = ['World'];
       const kwargs = { greeting: 'Hi' };
 
-      const stdin = generator.generateStdin(functionName, args, kwargs) as string;
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName,
+        args,
+        kwargs,
+        argsMode: 'stdin'
+      }) as string;
 
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
 

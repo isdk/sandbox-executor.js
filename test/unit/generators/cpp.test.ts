@@ -21,13 +21,14 @@ describe('CppGenerator', () => {
     it('应该生成 C++ 代理及相关支持文件', () => {
       const userCode = `#include <string>
 std::string greet(std::string s) { return "Hello " + s; }`;
-      const files = generator.generateFiles(
-        userCode,
-        'greet',
-        ['World'],
-        {},
-        signature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'greet',
+        args: ['World'],
+        kwargs: {},
+        signature,
+        argsMode: 'stdin',
+      });
 
       expect(files['main.cpp']).toBeDefined();
       expect(files['user_code.cpp']).toBe(userCode);
@@ -41,7 +42,13 @@ std::string greet(std::string s) { return "Hello " + s; }`;
 
   describe('generateStdin', () => {
     it('应该生成正确的 Stdin', () => {
-      const stdin = generator.generateStdin('greet', ['World'], {}) as string;
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName: 'greet',
+        args: ['World'],
+        kwargs: {},
+        argsMode: 'stdin'
+      }) as string;
       expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
     });
   });

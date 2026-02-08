@@ -196,18 +196,12 @@ const executor = createExecutor({
 Executes a function in the sandbox.
 
 ```typescript
-interface FunctionCallRequest {
-  // Required
-  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript' | 'c' | 'cpp';
+interface BaseFunctionRequest {
+  /** The source code containing the function */
   code: string;
-  functionName: string;
 
-  // Optional (Common)
-  /**
-   * Array for positional, Object for keyword/mixed.
-   * Supports: { "paramName": { "index": number, "value": any } }
-   */
-  args?: ArgumentItem[] | Record<string, ArgumentItem>;
+  /** The name of the function to call */
+  functionName: string;
 
   /** Execution timeout in seconds */
   timeout?: number;
@@ -222,6 +216,18 @@ interface FunctionCallRequest {
 
   /** Threshold for auto mode */
   autoModeThreshold?: number;
+}
+
+interface FunctionCallRequest extends BaseFunctionRequest {
+  // Required
+  language: 'python' | 'ruby' | 'quickjs' | 'php' | 'js' | 'javascript' | 'c' | 'cpp';
+
+  // Optional (Common)
+  /**
+   * Array for positional, Object for keyword/mixed.
+   * Supports: { "paramName": { "index": number, "value": any } }
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
 
   /** Interface Definition */
   schema?: FunctionSchema;

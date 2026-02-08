@@ -1,6 +1,5 @@
-import { CodeGenerator } from './base';
-import type { InferredSignature } from '../inference/engine';
-import type { InvokeOptions, ArgsMode, JsonSchema } from '../types/request';
+import { CodeGenerator, type GenerationOptions } from './base';
+import type { ArgsMode, JsonSchema } from '../types/request';
 import { Serializer } from './utils/serializer';
 
 export class CGenerator extends CodeGenerator {
@@ -12,15 +11,10 @@ export class CGenerator extends CodeGenerator {
   }
 
   generateFiles(
-    userCode: string,
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    signature: InferredSignature,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): Record<string, string | Uint8Array> {
-    const argsMode = options?.argsMode || 'stdin';
-    const dispatcher = this.generateDispatcher(functionName, signature);
+    const { code: userCode, functionName, args, kwargs, signature, argsMode } = options;
+    const dispatcher = this.generateDispatcher(functionName, options);
     const files: Record<string, string | Uint8Array> = {
       [`user_code${this.fileExtension}`]: userCode,
       [`__sandbox_dispatcher${this.fileExtension}`]: dispatcher,
@@ -59,12 +53,9 @@ export class CGenerator extends CodeGenerator {
   }
 
   generateStdin(
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): string | Uint8Array {
-    const argsMode = options?.argsMode || 'stdin';
+    const { functionName, args, kwargs, argsMode } = options;
     if (argsMode !== 'stdin') return '';
 
     return this.buildAtomicStdin({
@@ -74,7 +65,8 @@ export class CGenerator extends CodeGenerator {
     });
   }
 
-  protected generateDispatcher(functionName: string, signature: InferredSignature): string {
+  protected generateDispatcher(functionName: string, options: GenerationOptions): string {
+    const { signature } = options;
     const input = signature.input;
     const params: (JsonSchema & { name: string })[] = [];
 

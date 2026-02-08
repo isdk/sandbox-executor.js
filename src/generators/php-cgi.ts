@@ -1,6 +1,5 @@
-import { CodeGenerator } from './base';
-import type { InferredSignature } from '../inference/engine';
-import type { InvokeOptions, ArgsMode } from '../types/request';
+import { CodeGenerator, type GenerationOptions } from './base';
+import type { ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
 export class PHPCgiGenerator extends CodeGenerator {
@@ -12,14 +11,9 @@ export class PHPCgiGenerator extends CodeGenerator {
   }
 
   generateFiles(
-    userCode: string,
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    _signature: InferredSignature,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): Record<string, string | Uint8Array> {
-    const argsMode = options?.argsMode || 'stdin';
+    const { code: userCode, functionName, args, kwargs, argsMode } = options;
     let code = userCode.trim();
     if (!code.startsWith('<?php')) {
       code = '<?php\n' + code;
@@ -68,10 +62,7 @@ export class PHPCgiGenerator extends CodeGenerator {
   }
 
   generateStdin(
-    _functionName: string,
-    _args: unknown[],
-    _kwargs: Record<string, unknown>,
-    options?: InvokeOptions
+    _options: GenerationOptions
   ): string | Uint8Array {
     return '';
   }

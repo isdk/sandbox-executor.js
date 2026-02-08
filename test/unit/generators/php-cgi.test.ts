@@ -27,13 +27,14 @@ describe('PHPCgiGenerator', () => {
   describe('generateFiles', () => {
     it('应该生成包含 main.php 和 user_code.php 的文件映射', () => {
       const userCode = 'function add($a, $b) { return $a + $b; }';
-      const files = generator.generateFiles(
-        userCode,
-        'add',
-        [1, 2],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'add',
+        args: [1, 2],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
 
       expect(files['main.php']).toBeDefined();
       expect(files['user_code.php']).toContain('<?php');
@@ -47,13 +48,14 @@ describe('PHPCgiGenerator', () => {
 
     it('如果用户代码没有 <?php 标记，应该自动添加', () => {
       const userCode = 'echo "hello";';
-      const files = generator.generateFiles(
-        userCode,
-        'test',
-        [],
-        {},
-        defaultSignature
-      );
+      const files = generator.generateFiles({
+        code: userCode,
+        functionName: 'test',
+        args: [],
+        kwargs: {},
+        signature: defaultSignature,
+        argsMode: 'stdin',
+      });
       expect(files['user_code.php'] as string).toMatch(/^<\?php/);
     });
   });
@@ -64,7 +66,13 @@ describe('PHPCgiGenerator', () => {
       const args = [1, 'test'];
       const kwargs = { key: 'val' };
 
-      const stdin = generator.generateStdin(functionName, args, kwargs);
+      const stdin = generator.generateStdin({
+        code: '',
+        functionName,
+        args,
+        kwargs,
+        argsMode: 'stdin'
+      });
       expect(stdin).toBe('');
     });
   });

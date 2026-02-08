@@ -116,28 +116,20 @@ export class SandboxExecutor extends EventEmitter {
       const generator = getGenerator(request.language);
       const finalArgsMode = this.resolveArgsMode(generator, args, kwargs, normalizedRequest);
 
-      // 创建一个临时的 options 对象供 generator 使用 (兼容旧接口)
-      const genOptions = {
+      // 5. 生成执行代码
+      const generationOptions = {
+        code: request.code,
+        functionName: request.functionName,
+        args,
+        kwargs,
+        signature,
         argsMode: finalArgsMode,
         autoModeThreshold: normalizedRequest.autoModeThreshold,
         timeout: normalizedRequest.timeout,
       };
 
-      // 5. 生成执行代码
-      const executionFiles = generator.generateFiles(
-        request.code,
-        request.functionName,
-        args,
-        kwargs,
-        signature,
-        genOptions as any
-      );
-      const stdin = generator.generateStdin(
-        request.functionName,
-        args,
-        kwargs,
-        genOptions as any
-      );
+      const executionFiles = generator.generateFiles(generationOptions);
+      const stdin = generator.generateStdin(generationOptions);
 
       // 6. 构建文件系统
       const { fs, snapshot, differ } = await this.buildFileSystem(

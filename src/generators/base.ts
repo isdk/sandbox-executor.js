@@ -1,10 +1,24 @@
 import type { InferredSignature } from '../inference/engine';
-import { InputProtocol, type ArgsMode, type InvokeOptions } from '../types/request';
+import { InputProtocol, type ArgsMode, type BaseFunctionRequest } from '../types/request';
 
 export const RESULT_MARKERS = {
   START: '__SANDBOX_RESULT_START__',
   END: '__SANDBOX_RESULT_END__',
 } as const;
+
+/**
+ * Options for the code generator.
+ */
+export interface GenerationOptions extends BaseFunctionRequest {
+  /** Positional arguments. */
+  args: unknown[];
+  /** Keyword arguments. */
+  kwargs: Record<string, unknown>;
+  /** The inferred function signature. */
+  signature?: InferredSignature;
+  /** Final argument passing mode (resolved). */
+  argsMode: ArgsMode;
+}
 
 export abstract class CodeGenerator {
   abstract readonly language: string;
@@ -20,37 +34,21 @@ export abstract class CodeGenerator {
   /**
    * Generates all files needed for execution in the sandbox.
    *
-   * @param userCode - The original user source code.
-   * @param functionName - The name of the function to call.
-   * @param args - Positional arguments.
-   * @param kwargs - Keyword arguments.
-   * @param signature - The inferred function signature.
-   * @param options - Execution options including argsMode.
+   * @param options - Generation options.
    * @returns A map of filename to content.
    */
   abstract generateFiles(
-    userCode: string,
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    signature: InferredSignature,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): Record<string, string | Uint8Array>;
 
   /**
    * Generates the stdin content for the sandbox.
    *
-   * @param functionName - The name of the function to call.
-   * @param args - Positional arguments.
-   * @param kwargs - Keyword arguments.
-   * @param options - Execution options.
+   * @param options - Generation options.
    * @returns The stdin content as a Uint8Array or string.
    */
   generateStdin(
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): string | Uint8Array {
     return '';
   }

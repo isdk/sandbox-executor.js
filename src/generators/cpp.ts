@@ -1,5 +1,5 @@
 import { CGenerator } from './c';
-import type { InferredSignature } from '../inference/engine';
+import type { GenerationOptions } from './base';
 import type { ArgsMode } from '../types/request';
 
 export class CppGenerator extends CGenerator {
@@ -14,8 +14,8 @@ export class CppGenerator extends CGenerator {
    * C++ implementation of dispatcher with proper include file extensions
    * and support for std::string return values.
    */
-  protected generateDispatcher(functionName: string, signature: InferredSignature): string {
-    const dispatcher = super.generateDispatcher(functionName, signature);
+  protected generateDispatcher(functionName: string, options: GenerationOptions): string {
+    const dispatcher = super.generateDispatcher(functionName, options);
 
     const cppHelper = `
 #ifdef __cplusplus

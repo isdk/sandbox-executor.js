@@ -196,18 +196,12 @@ const executor = createExecutor({
 在沙盒中执行函数。
 
 ```typescript
-interface FunctionCallRequest {
-  // 必填
-  language: SupportedLanguage;
+interface BaseFunctionRequest {
+  /** 源码（包含要调用的函数） */
   code: string;
-  functionName: string;
 
-  // 可选 (常用)
-  /**
-   * 数组用于位置参数，对象用于关键字或混合参数。
-   * 支持: { "paramName": { "index": number, "value": any } }
-   */
-  args?: ArgumentItem[] | Record<string, ArgumentItem>;
+  /** 要调用的函数名 */
+  functionName: string;
 
   /** 超时时间（秒） */
   timeout?: number;
@@ -222,6 +216,18 @@ interface FunctionCallRequest {
 
   /** 自动模式下的切换阈值 */
   autoModeThreshold?: number;
+}
+
+interface FunctionCallRequest extends BaseFunctionRequest {
+  // 必填
+  language: SupportedLanguage;
+
+  // 可选 (常用)
+  /**
+   * 数组用于位置参数，对象用于关键字或混合参数。
+   * 支持: { "paramName": { "index": number, "value": any } }
+   */
+  args?: ArgumentItem[] | Record<string, ArgumentItem>;
 
   /** 接口定义 (Schema) */
   schema?: FunctionSchema;

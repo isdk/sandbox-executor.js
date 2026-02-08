@@ -1,6 +1,5 @@
-import { CodeGenerator } from './base';
-import type { InferredSignature } from '../inference/engine';
-import type { InvokeOptions, ArgsMode } from '../types/request';
+import { CodeGenerator, type GenerationOptions } from './base';
+import type { ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
 export class RubyGenerator extends CodeGenerator {
@@ -12,14 +11,9 @@ export class RubyGenerator extends CodeGenerator {
   }
 
   generateFiles(
-    userCode: string,
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    _signature: InferredSignature,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): Record<string, string | Uint8Array> {
-    const argsMode = options?.argsMode || 'stdin';
+    const { code: userCode, functionName, args, kwargs, argsMode } = options;
 
     if (argsMode === 'inline') {
       let wrapper = this.getTemplate('wrapper');
@@ -53,12 +47,9 @@ export class RubyGenerator extends CodeGenerator {
   }
 
   generateStdin(
-    functionName: string,
-    args: unknown[],
-    kwargs: Record<string, unknown>,
-    options?: InvokeOptions
+    options: GenerationOptions
   ): string | Uint8Array {
-    const argsMode = options?.argsMode || 'stdin';
+    const { functionName, args, kwargs, argsMode } = options;
     if (argsMode !== 'stdin') return '';
 
     return this.buildAtomicStdin({

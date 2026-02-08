@@ -66,25 +66,32 @@ describe('generators/index', () => {
         });
 
         it('应该生成 main 文件和用户代码文件', () => {
-          const files = generator.generateFiles(
-            'test',
-            'test',
-            [],
-            {},
-            {
+          const files = generator.generateFiles({
+            code: 'test',
+            functionName: 'test',
+            args: [],
+            kwargs: {},
+            signature: {
               input: {},
               variadic: false,
               acceptsKwargs: false,
               hasOptionsParam: false,
               source: 'convention',
-            }
-          );
+            },
+            argsMode: 'stdin',
+          });
 
           expect(files[`main${generator.fileExtension}`]).toBeDefined();
         });
 
         it('generateStdin 应该以 InputProtocol.ATOMIC 开头 (原子模式)', () => {
-           const stdin = generator.generateStdin('test', [], {});
+           const stdin = generator.generateStdin({
+             code: 'test',
+             functionName: 'test',
+             args: [],
+             kwargs: {},
+             argsMode: 'stdin',
+           });
            if (typeof stdin === 'string') {
              expect(stdin.startsWith(InputProtocol.ATOMIC)).toBe(true);
            }
