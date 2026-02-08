@@ -1,11 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { 
-  LanguageProvider, 
-  ExecutionRequest, 
-  DriverCapabilities, 
+import {
+  LanguageProvider,
+  ExecutionRequest,
+  DriverCapabilities,
   ExecutionBundle,
-  RawOutput, 
+  RawOutput,
   NormalizedArguments
 } from '../../types/provider';
 import { ExecutionResult } from '../../../types';
@@ -16,21 +16,21 @@ export class PythonProvider implements LanguageProvider {
   id = 'python';
   fileExtension = '.py';
 
-  private getTemplate(name: string): string {
+  private async getTemplate(name: string) {
     const templatePath = path.join(__dirname, 'templates', `${name}.py`);
     return fs.readFileSync(templatePath, 'utf8');
   }
 
-  generate(
-    request: ExecutionRequest, 
+  async generate(
+    request: ExecutionRequest,
     caps: DriverCapabilities,
     normalized: NormalizedArguments,
     signature?: InferredSignature
-  ): ExecutionBundle {
+  ): Promise<ExecutionBundle> {
     const { code, functionName, options } = request;
     const { args, kwargs } = normalized; // 直接使用 Core 归一化后的数据
     const workdir = options?.workdir || '/workspace';
-    
+
     const envs: Record<string, string> = {
       'SB_REPORT_IO': '1',
     };
@@ -40,7 +40,7 @@ export class PythonProvider implements LanguageProvider {
     }
 
     // 模板注入实现优雅降级
-    let wrapper = this.getTemplate('universal_wrapper');
+    let wrapper = await this.getTemplate('universal_wrapper');
     wrapper = wrapper
       .replace('{{SB_REPORT_IO}}', envs['SB_REPORT_IO'] || '0')
       .replace('{{SB_RESULT_FD}}', envs['SB_RESULT_FD'] || '')

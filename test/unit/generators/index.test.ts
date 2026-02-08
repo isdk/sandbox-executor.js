@@ -65,8 +65,8 @@ describe('generators/index', () => {
           expect(generator.fileExtension).toMatch(/^\.\w+$/);
         });
 
-        it('应该生成 main 文件和用户代码文件', () => {
-          const files = generator.generateFiles({
+        it('应该生成 main 文件和用户代码文件', async () => {
+          const files = await generator.generateFiles({
             code: 'test',
             functionName: 'test',
             args: [],

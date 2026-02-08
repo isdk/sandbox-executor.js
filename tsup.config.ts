@@ -1,4 +1,6 @@
 import { defineConfig } from 'tsup'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -30,5 +32,26 @@ export default defineConfig({
         "browser",
       ],
     }
+  },
+  onSuccess: async () => {
+    const copyDir = (src: string, dest: string) => {
+      if (!fs.existsSync(src)) return
+      fs.mkdirSync(dest, { recursive: true })
+      const entries = fs.readdirSync(src, { withFileTypes: true })
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name)
+        const destPath = path.join(dest, entry.name)
+        if (entry.isDirectory()) {
+          copyDir(srcPath, destPath)
+        } else {
+          fs.copyFileSync(srcPath, destPath)
+        }
+      }
+    }
+
+    // Copy generators templates to dist/templates
+    copyDir('src/generators/templates', 'dist/templates')
+
+    console.log('Templates copied to dist/templates')
   },
 })

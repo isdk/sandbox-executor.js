@@ -25,9 +25,9 @@ describe('PythonGenerator', () => {
   });
 
   describe('generateFiles', () => {
-    it('应该生成包含 main.py 和 user_code.py 的文件映射', () => {
+    it('应该生成包含 main.py 和 user_code.py 的文件映射', async () => {
       const userCode = 'def add(a, b): return a + b';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'add',
         args: [1, 2],

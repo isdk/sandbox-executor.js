@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SandboxExecutorV1 } from '../../../src/v1/core/executor';
 import { PythonProvider } from '../../../src/v1/languages/python';
-import { 
-  LanguageProvider, 
-  SandboxDriver, 
-  DriverCapabilities, 
-  ExecutionBundle, 
+import {
+  LanguageProvider,
+  SandboxDriver,
+  DriverCapabilities,
+  ExecutionBundle,
   RawOutput,
   ExecutionRequest,
   NormalizedArguments
@@ -16,7 +16,7 @@ import { InferredSignature } from '../../../src/inference/engine';
 class MockDriver implements SandboxDriver {
   id = 'mock-driver';
   constructor(public capabilities: DriverCapabilities) {}
-  
+
   async run(bundle: ExecutionBundle): Promise<RawOutput> {
     return {
       stdout: '__SANDBOX_RESULT_START__' + JSON.stringify({
@@ -61,7 +61,7 @@ describe('SandboxExecutorV1 (Decoupled Architecture)', () => {
   it('当驱动支持 FD 时，PythonProvider 应该在 Bundle 中注入 FD 环境变量', async () => {
     const pythonProvider = new PythonProvider();
     const spy = vi.spyOn(pythonProvider, 'generate');
-    
+
     const fdDriver = new MockDriver({
       transports: { fd: true, ipc: false, stdio: true },
       persistent: false,
@@ -82,7 +82,7 @@ describe('SandboxExecutorV1 (Decoupled Architecture)', () => {
     const capsSentToProvider = spy.mock.calls[0][1];
     expect(capsSentToProvider.transports.fd).toBe(true);
 
-    const bundle = spy.mock.results[0].value as ExecutionBundle;
+    const bundle = await spy.mock.results[0].value as ExecutionBundle;
     expect(bundle.envs['SB_RESULT_FD']).toBe('3');
   });
 

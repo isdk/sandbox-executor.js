@@ -25,9 +25,9 @@ describe('RubyGenerator', () => {
   });
 
   describe('generateFiles', () => {
-    it('应该生成包含 main.rb 和 user_code.rb 的文件映射', () => {
+    it('应该生成包含 main.rb 和 user_code.rb 的文件映射', async () => {
       const userCode = 'def add(a, b); a + b; end';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'add',
         args: [1, 2],

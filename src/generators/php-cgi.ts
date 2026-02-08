@@ -10,9 +10,9 @@ export class PHPCgiGenerator extends CodeGenerator {
     return ['stdin', 'inline', 'file'];
   }
 
-  generateFiles(
+  async generateFiles(
     options: GenerationOptions
-  ): Record<string, string | Uint8Array> {
+  ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
     let code = userCode.trim();
     if (!code.startsWith('<?php')) {
@@ -20,7 +20,7 @@ export class PHPCgiGenerator extends CodeGenerator {
     }
 
     if (argsMode === 'inline') {
-      let wrapper = this.getTemplate('wrapper');
+      let wrapper = await this.getTemplateAsync('wrapper');
       wrapper = wrapper
         .replace('{{FUNCTION_NAME}}', functionName)
         .replace('{{ARGS}}', this.serialize(args))
@@ -38,7 +38,7 @@ export class PHPCgiGenerator extends CodeGenerator {
         filePath: `/workspace/user_code${this.fileExtension}`
       });
       return {
-        [`main${this.fileExtension}`]: this.getTemplate('file'),
+        [`main${this.fileExtension}`]: await this.getTemplateAsync('file'),
         [`user_code${this.fileExtension}`]: code,
         [`.sandbox_request.json`]: requestData,
       };
@@ -52,7 +52,7 @@ export class PHPCgiGenerator extends CodeGenerator {
 
       // Convert string to base64 for pseudo-stdin using utf8 to preserve Unicode
       const encodedStdin = Buffer.from(stdinData, 'utf8').toString('base64');
-      const proxyContent = this.getTemplate('proxy').replace('{{STDIN_DATA}}', encodedStdin);
+      const proxyContent = (await this.getTemplateAsync('proxy')).replace('{{STDIN_DATA}}', encodedStdin);
 
       return {
         [`main${this.fileExtension}`]: proxyContent,

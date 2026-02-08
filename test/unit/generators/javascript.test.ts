@@ -25,9 +25,9 @@ describe('JavaScriptGenerator', () => {
   });
 
   describe('generateFiles', () => {
-    it('应该生成包含 main.js 和 user_code.js 的文件映射', () => {
+    it('应该生成包含 main.js 和 user_code.js 的文件映射', async () => {
       const userCode = 'function add(a, b) { return a + b; }';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'add',
         args: [1, 2],
@@ -42,9 +42,9 @@ describe('JavaScriptGenerator', () => {
       expect(proxyCode).toContain('START_MARKER = "__SANDBOX_RESULT_START__"');
     });
 
-    it('应该能够识别并添加 export', () => {
+    it('应该能够识别并添加 export', async () => {
       const userCode = 'const myFunc = (a) => a';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'myFunc',
         args: [1],

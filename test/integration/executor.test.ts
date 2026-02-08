@@ -499,9 +499,13 @@ describe('SandboxExecutor', () => {
         writeFile: mockWriteFile,
         mkdir: mockMkdir,
       }));
-      vi.doMock('path', () => ({
-        dirname: (p: string) => p.split('/').slice(0, -1).join('/'),
-      }));
+      vi.doMock('path', async (importOriginal) => {
+        const actual = await importOriginal<typeof import('path')>();
+        return {
+          ...actual,
+          dirname: (p: string) => p.split('/').slice(0, -1).join('/'),
+        };
+      });
 
       const result = await executor.execute({
         language: 'python',

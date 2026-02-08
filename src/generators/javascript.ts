@@ -10,9 +10,9 @@ export class JavaScriptGenerator extends CodeGenerator {
     return ['stdin', 'inline', 'file'];
   }
 
-  generateFiles(
+  async generateFiles(
     options: GenerationOptions
-  ): Record<string, string | Uint8Array> {
+  ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
     
     // Ensure user code has exports if it's using ESM
@@ -25,7 +25,7 @@ export class JavaScriptGenerator extends CodeGenerator {
     }
 
     if (argsMode === 'inline') {
-      let wrapper = this.getTemplate('wrapper');
+      let wrapper = await this.getTemplateAsync('wrapper');
       wrapper = wrapper
         .replace('{{FUNCTION_NAME}}', functionName)
         .replace('{{ARGS}}', this.serialize(args))
@@ -43,13 +43,13 @@ export class JavaScriptGenerator extends CodeGenerator {
         filePath: `./user_code${this.fileExtension}`
       });
       return {
-        [`main${this.fileExtension}`]: this.getTemplate('file'),
+        [`main${this.fileExtension}`]: await this.getTemplateAsync('file'),
         [`user_code${this.fileExtension}`]: processedCode,
         [`.sandbox_request.json`]: requestData,
       };
     } else {
       return {
-        [`main${this.fileExtension}`]: this.getTemplate('proxy'),
+        [`main${this.fileExtension}`]: await this.getTemplateAsync('proxy'),
         [`user_code${this.fileExtension}`]: processedCode,
       };
     }

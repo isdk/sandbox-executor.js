@@ -25,9 +25,9 @@ describe('PHPCgiGenerator', () => {
   });
 
   describe('generateFiles', () => {
-    it('应该生成包含 main.php 和 user_code.php 的文件映射', () => {
+    it('应该生成包含 main.php 和 user_code.php 的文件映射', async () => {
       const userCode = 'function add($a, $b) { return $a + $b; }';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'add',
         args: [1, 2],
@@ -46,9 +46,9 @@ describe('PHPCgiGenerator', () => {
       expect(proxyCode).toContain('START_MARKER = "__SANDBOX_RESULT_START__"');
     });
 
-    it('如果用户代码没有 <?php 标记，应该自动添加', () => {
+    it('如果用户代码没有 <?php 标记，应该自动添加', async () => {
       const userCode = 'echo "hello";';
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'test',
         args: [],

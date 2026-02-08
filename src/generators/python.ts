@@ -10,13 +10,13 @@ export class PythonGenerator extends CodeGenerator {
     return ['stdin', 'inline', 'file'];
   }
 
-  generateFiles(
+  async generateFiles(
     options: GenerationOptions
-  ): Record<string, string | Uint8Array> {
+  ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
     
     if (argsMode === 'inline') {
-      let wrapper = this.getTemplate('wrapper');
+      let wrapper = await this.getTemplateAsync('wrapper');
       wrapper = wrapper
         .replace('{{FUNCTION_NAME}}', functionName)
         .replace('{{ARGS}}', this.serialize(args))
@@ -35,14 +35,14 @@ export class PythonGenerator extends CodeGenerator {
       });
       
       return {
-        [`main${this.fileExtension}`]: this.getTemplate('file'),
+        [`main${this.fileExtension}`]: await this.getTemplateAsync('file'),
         [`user_code${this.fileExtension}`]: userCode,
         [`.sandbox_request.json`]: requestData,
       };
     } else {
       // Default to proxy/stdin mode
       return {
-        [`main${this.fileExtension}`]: this.getTemplate('proxy'),
+        [`main${this.fileExtension}`]: await this.getTemplateAsync('proxy'),
         [`user_code${this.fileExtension}`]: userCode,
       };
     }

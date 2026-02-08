@@ -18,10 +18,10 @@ describe('CppGenerator', () => {
   };
 
   describe('generateFiles', () => {
-    it('应该生成 C++ 代理及相关支持文件', () => {
+    it('应该生成 C++ 代理及相关支持文件', async () => {
       const userCode = `#include <string>
 std::string greet(std::string s) { return "Hello " + s; }`;
-      const files = generator.generateFiles({
+      const files = await generator.generateFiles({
         code: userCode,
         functionName: 'greet',
         args: ['World'],

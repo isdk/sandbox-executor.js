@@ -128,7 +128,7 @@ export class SandboxExecutor extends EventEmitter {
         timeout: normalizedRequest.timeout,
       };
 
-      const executionFiles = generator.generateFiles(generationOptions);
+      const executionFiles = await generator.generateFiles(generationOptions);
       const stdin = generator.generateStdin(generationOptions);
 
       // 6. 构建文件系统

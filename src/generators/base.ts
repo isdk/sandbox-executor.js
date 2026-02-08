@@ -42,7 +42,7 @@ export abstract class CodeGenerator {
    */
   abstract generateFiles(
     options: GenerationOptionsWithSignature
-  ): Record<string, string | Uint8Array>;
+  ): Promise<Record<string, string | Uint8Array>>;
 
   /**
    * Generates the stdin content for the sandbox.
@@ -74,24 +74,24 @@ export abstract class CodeGenerator {
   /**
    * Helper to load a template file.
    */
-  protected getTemplate(name: string, ext?: string): string {
+  protected async getTemplateAsync(name: string, ext?: string): Promise<string> {
     const extension = ext ?? this.fileExtension;
     try {
       // @ts-ignore
       if (typeof process !== 'undefined' && process.versions?.node) {
-        const fs = require('fs');
-        const path = require('path');
+        const fs = await import('node:fs');
+        const path = await import('node:path');
         const possiblePaths = [
           path.join(__dirname, 'templates', this.language, `${name}${extension}`),
           path.join(__dirname, 'templates', 'common', `${name}${extension}`),
+          path.join(__dirname, '..', 'templates', this.language, `${name}${extension}`),
+          path.join(__dirname, '..', 'templates', 'common', `${name}${extension}`),
           path.join(process.cwd(), 'src/generators/templates', this.language, `${name}${extension}`),
           path.join(process.cwd(), 'src/generators/templates', 'common', `${name}${extension}`),
-          path.join(process.cwd(), 'packages/sandbox-executor/src/generators/templates', this.language, `${name}${extension}`),
-          path.join(process.cwd(), 'packages/sandbox-executor/src/generators/templates', 'common', `${name}${extension}`),
         ];
         for (const p of possiblePaths) {
           if (fs.existsSync(p)) {
-            // console.log(`DEBUG: Loading template from ${p}`);
+            // console.log(`DEBUG: Found template at ${p}`);
             return fs.readFileSync(p, 'utf8');
           }
         }

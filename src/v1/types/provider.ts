@@ -36,7 +36,7 @@ export interface LanguageProvider {
     caps: DriverCapabilities,
     normalized: NormalizedArguments,
     signature?: InferredSignature
-  ): ExecutionBundle;
+  ): Promise<ExecutionBundle>;
 
   /**
    * 解析执行结果

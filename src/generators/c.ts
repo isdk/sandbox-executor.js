@@ -10,18 +10,18 @@ export class CGenerator extends CodeGenerator {
     return ['stdin', 'inline', 'file'];
   }
 
-  generateFiles(
+  async generateFiles(
     options: GenerationOptionsWithSignature
-  ): Record<string, string | Uint8Array> {
+  ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
     const dispatcher = this.generateDispatcher(functionName, options);
     const files: Record<string, string | Uint8Array> = {
       [`user_code${this.fileExtension}`]: userCode,
       [`__sandbox_dispatcher${this.fileExtension}`]: dispatcher,
-      [`cJSON.h`]: this.getTemplate('cJSON', '.h'),
+      [`cJSON.h`]: await this.getTemplateAsync('cJSON', '.h'),
       // Use the language's native extension for the cJSON implementation if possible,
       // otherwise fallback to .c from common
-      [`cJSON${this.fileExtension}`]: this.getTemplate('cJSON', '.c'),
+      [`cJSON${this.fileExtension}`]: await this.getTemplateAsync('cJSON', '.c'),
     };
 
     const requestData = {
@@ -34,14 +34,14 @@ export class CGenerator extends CodeGenerator {
     if (argsMode === 'inline') {
       const jsonStr = JSON.stringify(requestData);
       const escapedJson = Serializer.escapeCString(jsonStr);
-      mainContent = this.getTemplate('wrapper', '.c').replace('{{ARGS_JSON}}', escapedJson);
+      mainContent = (await this.getTemplateAsync('wrapper', '.c')).replace('{{ARGS_JSON}}', escapedJson);
     } else if (argsMode === 'file') {
-      mainContent = this.getTemplate('file', '.c');
+      mainContent = await this.getTemplateAsync('file', '.c');
       const requestFile = '/workspace/.sandbox_request.json';
       mainContent = `#define SANDBOX_REQUEST_FILE "${requestFile}"\n` + mainContent;
       files[`.sandbox_request.json`] = JSON.stringify(requestData);
     } else {
-      mainContent = this.getTemplate('proxy', '.c');
+      mainContent = await this.getTemplateAsync('proxy', '.c');
     }
 
     // Dynamically adjust includes based on file extension (for C++)

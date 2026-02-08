@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events-ex';
-import { 
-  LanguageProvider, 
-  SandboxDriver, 
-  ExecutionRequest 
+import {
+  LanguageProvider,
+  SandboxDriver,
+  ExecutionRequest
 } from '../types/provider';
 import { ExecutionResult } from '../../types';
 import { FSBuilder } from '../../fs/fs-builder'; // 复用现有的 FS 构建逻辑
@@ -29,8 +29,8 @@ export class SandboxExecutorV1 extends EventEmitter {
   }
 
   async execute<T = any>(
-    languageId: string, 
-    request: ExecutionRequest, 
+    languageId: string,
+    request: ExecutionRequest,
     driverId?: string
   ): Promise<ExecutionResult<T>> {
     const provider = this.providers.get(languageId);
@@ -51,7 +51,7 @@ export class SandboxExecutorV1 extends EventEmitter {
     const normalized = ArgumentNormalizer.normalize(request, signature);
 
     // 3. 生成执行包 (传入归一化后的数据)
-    const bundle = provider.generate(request, driver.capabilities, normalized, signature);
+    const bundle = await provider.generate(request, driver.capabilities, normalized, signature);
 
     // 4. 增强文件系统
     if (request.options?.files) {
