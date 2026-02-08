@@ -1,5 +1,5 @@
+import { GenerationOptionsWithSignature } from './base';
 import { CGenerator } from './c';
-import type { GenerationOptions } from './base';
 import type { ArgsMode } from '../types/request';
 
 export class CppGenerator extends CGenerator {
@@ -14,7 +14,7 @@ export class CppGenerator extends CGenerator {
    * C++ implementation of dispatcher with proper include file extensions
    * and support for std::string return values.
    */
-  protected generateDispatcher(functionName: string, options: GenerationOptions): string {
+  protected generateDispatcher(functionName: string, options: GenerationOptionsWithSignature): string {
     const dispatcher = super.generateDispatcher(functionName, options);
 
     const cppHelper = `

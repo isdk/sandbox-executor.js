@@ -1,4 +1,4 @@
-import { CodeGenerator, type GenerationOptions } from './base';
+import { CodeGenerator, type GenerationOptions, type GenerationOptionsWithSignature } from './base';
 import type { ArgsMode, JsonSchema } from '../types/request';
 import { Serializer } from './utils/serializer';
 
@@ -11,9 +11,9 @@ export class CGenerator extends CodeGenerator {
   }
 
   generateFiles(
-    options: GenerationOptions
+    options: GenerationOptionsWithSignature
   ): Record<string, string | Uint8Array> {
-    const { code: userCode, functionName, args, kwargs, signature, argsMode } = options;
+    const { code: userCode, functionName, args, kwargs, argsMode } = options;
     const dispatcher = this.generateDispatcher(functionName, options);
     const files: Record<string, string | Uint8Array> = {
       [`user_code${this.fileExtension}`]: userCode,
@@ -65,7 +65,7 @@ export class CGenerator extends CodeGenerator {
     });
   }
 
-  protected generateDispatcher(functionName: string, options: GenerationOptions): string {
+  protected generateDispatcher(functionName: string, options: GenerationOptionsWithSignature): string {
     const { signature } = options;
     const input = signature.input;
     const params: (JsonSchema & { name: string })[] = [];

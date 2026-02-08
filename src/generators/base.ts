@@ -1,3 +1,5 @@
+import type { SetRequired } from 'type-fest';
+
 import type { InferredSignature } from '../inference/engine';
 import { InputProtocol, type ArgsMode, type BaseFunctionRequest } from '../types/request';
 
@@ -19,6 +21,7 @@ export interface GenerationOptions extends BaseFunctionRequest {
   /** Final argument passing mode (resolved). */
   argsMode: ArgsMode;
 }
+export type GenerationOptionsWithSignature = SetRequired<GenerationOptions, 'signature'>;
 
 export abstract class CodeGenerator {
   abstract readonly language: string;
@@ -38,7 +41,7 @@ export abstract class CodeGenerator {
    * @returns A map of filename to content.
    */
   abstract generateFiles(
-    options: GenerationOptions
+    options: GenerationOptionsWithSignature
   ): Record<string, string | Uint8Array>;
 
   /**
@@ -61,10 +64,10 @@ export abstract class CodeGenerator {
     const jsonStr = JSON.stringify(data);
     const jsonBytes = new TextEncoder().encode(jsonStr);
     const len = jsonBytes.length;
-    
+
     // Use 8-character hex for length to be safe with UTF-8 encoding in runFS
     const lenHex = len.toString(16).padStart(8, '0');
-    
+
     return InputProtocol.ATOMIC + lenHex + jsonStr;
   }
 
