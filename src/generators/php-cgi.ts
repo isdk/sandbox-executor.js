@@ -1,4 +1,4 @@
-import { CodeGenerator, type GenerationOptions } from './base';
+import { CodeGenerator, GenerationOptionsWithSignature, type GenerationOptions } from './base';
 import type { ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
@@ -11,7 +11,7 @@ export class PHPCgiGenerator extends CodeGenerator {
   }
 
   async generateFiles(
-    options: GenerationOptions
+    options: GenerationOptionsWithSignature
   ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
     let code = userCode.trim();

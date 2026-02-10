@@ -21,7 +21,7 @@ export interface GenerationOptions extends BaseFunctionRequest {
   /** Final argument passing mode (resolved). */
   argsMode: ArgsMode;
 }
-export type GenerationOptionsWithSignature = SetRequired<GenerationOptions, 'signature'>;
+export type GenerationOptionsWithSignature = SetRequired<GenerationOptions, 'signature' | 'functionName'>;
 
 export abstract class CodeGenerator {
   abstract readonly language: string;

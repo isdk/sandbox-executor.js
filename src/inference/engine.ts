@@ -26,7 +26,7 @@ export interface InferredSignature {
 
 /**
  * Engine for determining function signatures from source code or metadata.
- * 
+ *
  * It uses a priority-based approach:
  * 1. Explicit schema provided by the user.
  * 2. Static analysis (regex-based) of the source code.
@@ -35,7 +35,7 @@ export interface InferredSignature {
 export class SignatureInferenceEngine {
   /**
    * Resolves the signature of a function within the given code.
-   * 
+   *
    * @param code - The source code to analyze.
    * @param functionName - Name of the function to resolve (optional).
    * @param language - Programming language of the code.
@@ -55,7 +55,7 @@ export class SignatureInferenceEngine {
     // Detection/Wrapping logic if functionName is missing
     if (!finalFunctionName) {
       const detectedNames = this.findFunctions(code, canonicalLanguage);
-      
+
       if (detectedNames.length === 1) {
         finalFunctionName = detectedNames[0];
       } else if (detectedNames.length > 1) {
@@ -92,7 +92,7 @@ export class SignatureInferenceEngine {
     try {
       const inferred = this.inferFromCode(finalCode, finalFunctionName, canonicalLanguage);
       if (inferred) {
-        return { ...inferred, functionName: finalFunctionName, code: finalCode, source: 'inferred' };
+        return { ...inferred, source: 'inferred' };
       }
     } catch (e) {
       // Inference failed, fall through to convention
@@ -216,21 +216,29 @@ export class SignatureInferenceEngine {
       // Basic C param: type name
       const parts = trimmed.split(/\s+/);
       const name = parts[parts.length - 1].replace(/^\*/, ''); // handle pointers
-      
+
       // Try to determine internal type from C type declaration
       const cType = parts.slice(0, -1).join(' ').toLowerCase();
       let type: JsonSchema['type'] = 'number';
-      
+
       if (cType.includes('char*') || cType.includes('char *') || cType.includes('string')) {
         type = 'string';
       } else if (cType.includes('bool') || cType.includes('_bool')) {
         type = 'boolean';
       }
-      
+
       input[name] = { type, required: true, index: index++ };
     }
 
-    return { input, variadic: false, acceptsKwargs: false, hasOptionsParam: false, returnType };
+    return {
+      functionName,
+      code,
+      input,
+      variadic: false,
+      acceptsKwargs: false,
+      hasOptionsParam: false,
+      returnType,
+    };
   }
 
   private inferCpp(code: string, functionName: string) {
@@ -262,7 +270,7 @@ export class SignatureInferenceEngine {
       }
     }
 
-    return { input, variadic, acceptsKwargs, hasOptionsParam: false };
+    return { functionName, code, input, variadic, acceptsKwargs, hasOptionsParam: false };
   }
 
   private inferPHP(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
@@ -288,7 +296,7 @@ export class SignatureInferenceEngine {
       }
     }
 
-    return { input, variadic, acceptsKwargs: true, hasOptionsParam: false };
+    return { functionName, code, input, variadic, acceptsKwargs: true, hasOptionsParam: false };
   }
 
   private inferJavaScript(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
@@ -329,7 +337,14 @@ export class SignatureInferenceEngine {
       }
     });
 
-    return { input, variadic, acceptsKwargs: false, hasOptionsParam };
+    return {
+      functionName,
+      code,
+      input,
+      variadic,
+      acceptsKwargs: false,
+      hasOptionsParam,
+    };
   }
 
   private inferRuby(code: string, functionName: string): Omit<InferredSignature, 'source'> | null {
@@ -353,11 +368,13 @@ export class SignatureInferenceEngine {
       }
     }
 
-    return { input, variadic, acceptsKwargs, hasOptionsParam: false };
+    return { functionName, code, input, variadic, acceptsKwargs, hasOptionsParam: false };
   }
 
-  private getConvention(language: string): InferredSignature {
-    const conventions: Record<string, InferredSignature> = {
+  private getConvention(
+    language: string
+  ): Omit<InferredSignature, 'functionName' | 'code'> {
+    const conventions: Record<string, Omit<InferredSignature, 'functionName' | 'code'>> = {
       python: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       ruby: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },
       php: { input: {}, variadic: true, acceptsKwargs: true, hasOptionsParam: false, source: 'convention' },

@@ -1,4 +1,4 @@
-import { CodeGenerator, type GenerationOptions } from './base';
+import { CodeGenerator, GenerationOptionsWithSignature, type GenerationOptions } from './base';
 import type { ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
@@ -11,17 +11,17 @@ export class PythonGenerator extends CodeGenerator {
   }
 
   async generateFiles(
-    options: GenerationOptions
+    options: GenerationOptionsWithSignature
   ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
-    
+
     if (argsMode === 'inline') {
       let wrapper = await this.getTemplateAsync('wrapper');
       wrapper = wrapper
         .replace('{{FUNCTION_NAME}}', functionName)
         .replace('{{ARGS}}', this.serialize(args))
         .replace('{{KWARGS}}', this.serialize(kwargs));
-      
+
       return {
         [`main${this.fileExtension}`]: wrapper,
         [`user_code${this.fileExtension}`]: userCode,
@@ -33,7 +33,7 @@ export class PythonGenerator extends CodeGenerator {
         kwargs,
         filePath: `/workspace/user_code${this.fileExtension}`
       });
-      
+
       return {
         [`main${this.fileExtension}`]: await this.getTemplateAsync('file'),
         [`user_code${this.fileExtension}`]: userCode,

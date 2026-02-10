@@ -1,4 +1,4 @@
-import { CodeGenerator, type GenerationOptions } from './base';
+import { CodeGenerator, GenerationOptionsWithSignature, type GenerationOptions } from './base';
 import type { ArgsMode } from '../types/request';
 import { Serializer } from './utils/serializer';
 
@@ -11,10 +11,10 @@ export class JavaScriptGenerator extends CodeGenerator {
   }
 
   async generateFiles(
-    options: GenerationOptions
+    options: GenerationOptionsWithSignature
   ): Promise<Record<string, string | Uint8Array>> {
     const { code: userCode, functionName, args, kwargs, argsMode } = options;
-    
+
     // Ensure user code has exports if it's using ESM
     let processedCode = userCode;
     if (!userCode.includes('export ') && !userCode.includes('module.exports')) {
