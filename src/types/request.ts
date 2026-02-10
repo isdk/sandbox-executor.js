@@ -203,8 +203,12 @@ export type ArgumentItem = any | { index: number; value: any };
 export interface BaseFunctionRequest {
   /** The source code containing the function. */
   code: string;
-  /** The name of the function to call. */
-  functionName: string;
+  /**
+   * The name of the function to call.
+   * If not provided, the engine will attempt to detect a unique function in the code.
+   * If no function is detected, the code will be treated as the function body.
+   */
+  functionName?: string;
   /**
    * Argument passing mode.
    * - `stdin`: Pass arguments via standard input (safe for large data).

@@ -6,6 +6,10 @@ import type { FunctionSchema, InputSchema, JsonSchema, SupportedLanguage } from 
  * Represents a function signature determined by the inference engine.
  */
 export interface InferredSignature {
+  /** The name of the function being called. */
+  functionName: string;
+  /** The source code (possibly wrapped). */
+  code: string;
   /** Input parameter schemas. */
   input: InputSchema;
   /** Whether the function accepts variable positional arguments. */
@@ -33,22 +37,49 @@ export class SignatureInferenceEngine {
    * Resolves the signature of a function within the given code.
    * 
    * @param code - The source code to analyze.
-   * @param functionName - Name of the function to resolve.
+   * @param functionName - Name of the function to resolve (optional).
    * @param language - Programming language of the code.
    * @param schema - Optional explicit schema to use instead of inference.
    * @returns The resolved function signature.
    */
   resolve(
     code: string,
-    functionName: string,
+    functionName: string | undefined,
     language: SupportedLanguage,
     schema?: FunctionSchema
   ): InferredSignature {
     const canonicalLanguage = this.canonicalizeLanguage(language);
+    let finalFunctionName = functionName;
+    let finalCode = code;
+
+    // Detection/Wrapping logic if functionName is missing
+    if (!finalFunctionName) {
+      const detectedNames = this.findFunctions(code, canonicalLanguage);
+      
+      if (detectedNames.length === 1) {
+        finalFunctionName = detectedNames[0];
+      } else if (detectedNames.length > 1) {
+        // Apply language-specific filtering
+        const filteredNames = this.filterFunctions(detectedNames, canonicalLanguage);
+        if (filteredNames.length === 1) {
+          finalFunctionName = filteredNames[0];
+        } else {
+          throw new Error(
+            `Multiple functions detected: [${filteredNames.join(', ')}]. Please specify functionName manually.`
+          );
+        }
+      } else {
+        // No functions detected, enter Body Mode
+        finalFunctionName = '__anonymous_wrapper__';
+        finalCode = this.wrapAsBody(code, finalFunctionName, canonicalLanguage, schema);
+      }
+    }
 
     // Priority 1: User-provided schema
     if (schema?.input) {
       return {
+        functionName: finalFunctionName,
+        code: finalCode,
         input: schema.input,
         variadic: schema.variadic ?? false,
         acceptsKwargs: schema.acceptsKwargs ?? this.languageAcceptsKwargs(canonicalLanguage),
@@ -59,16 +90,78 @@ export class SignatureInferenceEngine {
 
     // Priority 2: Infer from code
     try {
-      const inferred = this.inferFromCode(code, functionName, canonicalLanguage);
+      const inferred = this.inferFromCode(finalCode, finalFunctionName, canonicalLanguage);
       if (inferred) {
-        return { ...inferred, source: 'inferred' };
+        return { ...inferred, functionName: finalFunctionName, code: finalCode, source: 'inferred' };
       }
     } catch (e) {
       // Inference failed, fall through to convention
     }
 
     // Priority 3: Language convention
-    return this.getConvention(canonicalLanguage);
+    return {
+      ...this.getConvention(canonicalLanguage),
+      functionName: finalFunctionName,
+      code: finalCode,
+    };
+  }
+
+  private findFunctions(code: string, language: string): string[] {
+    const patterns: Record<string, RegExp> = {
+      python: /^def\s+([a-zA-Z_]\w*)\s*\(/gm,
+      ruby: /^def\s+([a-zA-Z_]\w*)\s*(?:\(.*\))?/gm,
+      php: /^function\s+([a-zA-Z_]\w*)\s*\(/gm,
+      quickjs: /^(?:export\s+(?:default\s+)?)?(?:function\s+([a-zA-Z_]\w*)|(?:const|let|var)\s+([a-zA-Z_]\w*)\s*=\s*.*=>)/gm,
+      clang: /^[\w\s\*]+\s+([a-zA-Z_]\w*)\s*\(/gm,
+      clangpp: /^[\w\s\*]+\s+([a-zA-Z_]\w*)\s*\(/gm,
+    };
+
+    const pattern = patterns[language];
+    if (!pattern) return [];
+
+    const matches = [];
+    let match;
+    while ((match = pattern.exec(code)) !== null) {
+      // For JS, it might be the 1st or 2nd capture group
+      matches.push(match[1] || match[2]);
+    }
+    return matches.filter(Boolean);
+  }
+
+  private filterFunctions(names: string[], language: string): string[] {
+    if (language === 'python' || language === 'ruby') {
+      // Filter out private functions (starting with _) if public ones exist
+      const publicNames = names.filter(n => !n.startsWith('_'));
+      return publicNames.length > 0 ? publicNames : names;
+    }
+    if (language === 'quickjs') {
+      // In JS, if we had a more complex regex we could check for 'export',
+      // but findFunctions already handles some. For now, we return as is.
+      return names;
+    }
+    return names;
+  }
+
+  private wrapAsBody(code: string, functionName: string, language: string, schema?: FunctionSchema): string {
+    switch (language) {
+      case 'python':
+        const indentedCode = code.split('\n').map(line => '    ' + line).join('\n');
+        return `def ${functionName}(*args, **kwargs):\n${indentedCode}`;
+      case 'quickjs':
+        return `export async function ${functionName}(...args) {\n${code}\n}`;
+      case 'ruby':
+        return `def ${functionName}(*args)\n${code}\nend`;
+      case 'php':
+        // PHP doesn't strictly need export, it's global when included
+        return `function ${functionName}(...$args) {\n${code}\n}`;
+      case 'clang':
+      case 'clangpp':
+        // For C/C++, we need types from schema. If no schema, we use default int return and void/mixed args
+        const returnType = (schema as any)?.output?.type === 'string' ? 'char*' : 'int';
+        return `${returnType} ${functionName}() {\n${code}\n}`;
+      default:
+        return code;
+    }
   }
 
   private canonicalizeLanguage(language: SupportedLanguage): string {

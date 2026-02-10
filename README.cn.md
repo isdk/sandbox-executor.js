@@ -203,8 +203,11 @@ interface BaseFunctionRequest {
   /** 源码（包含要调用的函数） */
   code: string;
 
-  /** 要调用的函数名 */
-  functionName: string;
+  /**
+   * 要调用的函数名。
+   * 如果省略，将自动探测唯一函数；若探测不到，则将代码视为函数体（Body 模式）。
+   */
+  functionName?: string;
 
   /** 超时时间（秒） */
   timeout?: number;

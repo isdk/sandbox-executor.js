@@ -86,6 +86,53 @@ describe('SandboxExecutorV1 (Decoupled Architecture)', () => {
     expect(bundle.envs['SB_RESULT_FD']).toBe('3');
   });
 
+  describe('探测与 Body 模式 (v1)', () => {
+    it('当缺失 functionName 时，应该能自动探测函数并传递给 Provider', async () => {
+      const pythonProvider = new PythonProvider();
+      const spy = vi.spyOn(pythonProvider, 'generate');
+      const mockDriver = new MockDriver({
+        transports: { fd: false, ipc: false, stdio: true },
+        persistent: false,
+        features: { network: false, fs: 'virtual' }
+      });
+
+      const executor = new SandboxExecutorV1({
+        providers: [pythonProvider],
+        drivers: [mockDriver]
+      });
+
+      const code = 'def auto_func(x): return x';
+      await executor.execute('python', { code, args: [1] });
+
+      const requestSentToProvider = spy.mock.calls[0][0];
+      expect(requestSentToProvider.functionName).toBe('auto_func');
+      expect(requestSentToProvider.code).toBe(code);
+    });
+
+    it('当代码不包含函数定义时，应该包装为 Body 并传递给 Provider', async () => {
+      const pythonProvider = new PythonProvider();
+      const spy = vi.spyOn(pythonProvider, 'generate');
+      const mockDriver = new MockDriver({
+        transports: { fd: false, ipc: false, stdio: true },
+        persistent: false,
+        features: { network: false, fs: 'virtual' }
+      });
+
+      const executor = new SandboxExecutorV1({
+        providers: [pythonProvider],
+        drivers: [mockDriver]
+      });
+
+      const code = 'return 123';
+      await executor.execute('python', { code });
+
+      const requestSentToProvider = spy.mock.calls[0][0];
+      expect(requestSentToProvider.functionName).toBe('__anonymous_wrapper__');
+      expect(requestSentToProvider.code).toContain('def __anonymous_wrapper__');
+      expect(requestSentToProvider.code).toContain('    return 123');
+    });
+  });
+
   it('当没有结果通道时，parseResult 应该能正确从 stdout 解析结果', () => {
     const pythonProvider = new PythonProvider();
     const rawOutput: RawOutput = {

@@ -98,7 +98,7 @@ export class SandboxExecutor extends EventEmitter {
     const hasMount = this.hasValidMount(mount);
 
     try {
-      // 1. 推断函数签名
+      // 1. 推断函数签名 (可能探测函数名或包装 Body)
       const signature = this.inferenceEngine.resolve(
         request.code,
         request.functionName,
@@ -116,10 +116,10 @@ export class SandboxExecutor extends EventEmitter {
       const generator = getGenerator(request.language);
       const finalArgsMode = this.resolveArgsMode(generator, args, kwargs, normalizedRequest);
 
-      // 5. 生成执行代码
+      // 5. 生成执行代码 (使用 signature 中确定的 code 和 functionName)
       const generationOptions = {
-        code: request.code,
-        functionName: request.functionName,
+        code: signature.code,
+        functionName: signature.functionName,
         args,
         kwargs,
         signature,

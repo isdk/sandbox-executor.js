@@ -203,8 +203,11 @@ interface BaseFunctionRequest {
   /** The source code containing the function */
   code: string;
 
-  /** The name of the function to call */
-  functionName: string;
+  /**
+   * The name of the function to call.
+   * If omitted, it will be auto-detected or the code will be treated as the function body (Body Mode).
+   */
+  functionName?: string;
 
   /** Execution timeout in seconds */
   timeout?: number;

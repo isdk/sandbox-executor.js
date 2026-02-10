@@ -83,4 +83,27 @@ def complex_math(a, b, c=10):
     expect(result.success).toBe(true);
     expect(result.result).toBe(100); // (5 + 5) * 10
   });
+
+  describe('探测与 Body 模式', () => {
+    it('应该能自动探测唯一的 Python 函数', async () => {
+      const code = 'def v1_auto_detect(x): return x * 2';
+      const result = await executor.execute('python', {
+        code,
+        args: [21]
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(42);
+    });
+
+    it('应该支持 Body 模式包装执行', async () => {
+      const code = 'x = 100\nreturn x / 2';
+      const result = await executor.execute('python', {
+        code
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(50);
+    });
+  });
 });

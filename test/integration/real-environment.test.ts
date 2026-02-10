@@ -194,4 +194,122 @@ def create_file(content):
       expect(new TextDecoder().decode(file?.content)).toBe('hello from python');
     });
   });
+
+  describe('Detection and Body Mode', () => {
+    it('should detect unique Python function', async () => {
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def auto_detected_add(a, b): return a + b',
+        args: [5, 7],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(12);
+    });
+
+    it('should run Python in Body Mode', async () => {
+      const result = await executor.execute({
+        language: 'python',
+        code: 'a = 10\nb = 20\nreturn a * b',
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(200);
+    });
+
+    it('should detect unique JavaScript function', async () => {
+      const result = await executor.execute({
+        language: 'js',
+        code: 'function js_auto(n) { return n * n; }',
+        args: [4],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(16);
+    });
+
+    it('should run JavaScript in Body Mode', async () => {
+      const result = await executor.execute({
+        language: 'js',
+        code: 'const x = 5; return x + 10;',
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(15);
+    });
+
+    it('should detect unique Ruby function', async () => {
+      const result = await executor.execute({
+        language: 'ruby',
+        code: 'def ruby_auto(s); s.reverse; end',
+        args: ['hello'],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe('olleh');
+    });
+
+    it('should run Ruby in Body Mode', async () => {
+      const result = await executor.execute({
+        language: 'ruby',
+        code: 'x = 10; return x * 2',
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(20);
+    });
+
+    it('should detect unique PHP function', async () => {
+      const result = await executor.execute({
+        language: 'php',
+        code: 'function php_auto($n) { return $n + 1; }',
+        args: [9],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(10);
+    });
+
+    it('should run PHP in Body Mode', async () => {
+      const result = await executor.execute({
+        language: 'php',
+        code: '$x = 100; return $x / 2;',
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(50);
+    });
+
+    it('should detect unique C function', async () => {
+      const result = await executor.execute({
+        language: 'c',
+        code: 'int c_auto(int n) { return n * 2; }',
+        args: [21],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(42);
+    });
+
+    it('should detect unique C++ function', async () => {
+      const result = await executor.execute({
+        language: 'cpp',
+        code: '#include <iostream>\nint cpp_auto(int n) { return n + n; }',
+        args: [25],
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(50);
+    });
+
+    it('should run C in Body Mode (with schema)', async () => {
+      const result = await executor.execute({
+        language: 'c',
+        code: 'return 123;',
+        schema: { output: { type: 'number' } }
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(123);
+    });
+
+    it('should run C++ in Body Mode (with schema)', async () => {
+      const result = await executor.execute({
+        language: 'cpp',
+        code: 'return 456;',
+        schema: { output: { type: 'number' } }
+      });
+      expect(result.success).toBe(true);
+      expect(result.result).toBe(456);
+    });
+  });
 });

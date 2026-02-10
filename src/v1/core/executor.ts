@@ -51,7 +51,13 @@ export class SandboxExecutorV1 extends EventEmitter {
     const normalized = ArgumentNormalizer.normalize(request, signature);
 
     // 3. 生成执行包 (传入归一化后的数据)
-    const bundle = await provider.generate(request, driver.capabilities, normalized, signature);
+    // 使用 signature 中确定的 code 和 functionName 覆盖原始请求
+    const effectiveRequest: ExecutionRequest = {
+      ...request,
+      code: signature.code,
+      functionName: signature.functionName,
+    };
+    const bundle = await provider.generate(effectiveRequest, driver.capabilities, normalized, signature);
 
     // 4. 增强文件系统
     if (request.options?.files) {
