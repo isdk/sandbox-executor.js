@@ -351,7 +351,7 @@ export class SignatureInferenceEngine {
     const match = code.match(new RegExp(`def\\s+${functionName}\\s*(?:\\(([^)]*)\\))?`, 'm'));
     if (!match) return null;
 
-    const input: Record<string, JsonSchema & { index: number }> = {};
+    const input: Record<string, JsonSchema & { index?: number }> = {};
     let variadic = false;
     let acceptsKwargs = false;
     let index = 0;
@@ -362,9 +362,14 @@ export class SignatureInferenceEngine {
 
       if (trimmed.startsWith('**')) acceptsKwargs = true;
       else if (trimmed.startsWith('*')) variadic = true;
-      else {
-        const name = trimmed.split(/[=:]/)[0].trim();
-        input[name] = { required: !trimmed.includes('=') && !trimmed.includes(':'), index: index++ };
+      else if (trimmed.includes(':')) {
+        // Ruby keyword argument (e.g., name: "val" or name:)
+        const name = trimmed.split(':')[0].trim();
+        input[name] = { required: !trimmed.includes(':') || trimmed.endsWith(':') };
+        acceptsKwargs = true;
+      } else {
+        const name = trimmed.split('=')[0].trim();
+        input[name] = { required: !trimmed.includes('='), index: index++ };
       }
     }
 

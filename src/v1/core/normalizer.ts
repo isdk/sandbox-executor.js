@@ -42,6 +42,11 @@ export class ArgumentNormalizer {
       }
     }
 
+    // 兼容废弃的 kwargs 属性
+    if ((request as any).kwargs) {
+      Object.assign(kwargs, (request as any).kwargs);
+    }
+
     // 2. 智能填补：利用签名信息将 kwargs 中的值映射到 args 数组的空位中
     if (signature && signature.input) {
       const inputSchema = signature.input;

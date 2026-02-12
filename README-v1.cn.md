@@ -37,9 +37,13 @@ v1 采用了三层解耦架构：
 
 - [x] **核心接口定义**: 确立了 `LanguageProvider` 和 `SandboxDriver` 的契约。
 - [x] **协议实现**: 完成了 `Sandbox-Link` 消息结构的定义。
-- [x] **Python 插件 (Alpha)**:
+- [x] **Python 插件 (Beta)**:
   - 实现了 `universal_wrapper.py`，支持 SIP 协议读取和环境自适应输出。
   - 实现了 `LogInterceptor` 实时拦截 `print`。
+- [x] **JavaScript 插件 (Alpha)**: 支持 QuickJS 运行时。
+- [x] **Ruby 插件 (Alpha)**: 支持 Ruby 运行时及日志拦截。
+- [x] **PHP-CGI 插件 (Alpha)**: 针对 WASM 环境优化了输入流处理。
+- [x] **C/C++ 提供者重构**: 完成了基于 `cJSON` 的动态调度器生成逻辑。
 - [x] **Runno 驱动**: 完成了基于 WASM 的 Runno 适配。
 - [x] **参数归一化**: 成功移植并优化了原有的智能参数处理逻辑。
 - [x] **测试通过**:
@@ -48,10 +52,8 @@ v1 采用了三层解耦架构：
 
 ### 待办 (Todo)
 
-- [ ] **C/C++ 提供者重构**: 迁移现有的 C/C++ 生成逻辑到 v1 架构。
-- [ ] **TemplateManager**: 建立稳健的模板发现与加载机制，取代目前的硬编码路径。
+- [ ] **TemplateManager 增强**: 建立更稳健的模板发现与加载机制。
 - [ ] **持久化会话 (Session)**: 为未来“驻留内存”模式预留协议支持。
-- [ ] **其他语言包**: 迁移 Ruby, JS, PHP 到 v1。
 - [ ] **Native Driver**: 探索基于 Host 原生隔离的执行驱动。
 
 ## 关键决策记录

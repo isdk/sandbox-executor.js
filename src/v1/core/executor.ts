@@ -2,12 +2,14 @@ import { EventEmitter } from 'events-ex';
 import {
   LanguageProvider,
   SandboxDriver,
-  ExecutionRequest
+  ExecutionRequest,
+  SandboxSession
 } from '../types/provider';
 import { ExecutionResult } from '../../types';
 import { FSBuilder } from '../../fs/fs-builder'; // 复用现有的 FS 构建逻辑
 import { SignatureInferenceEngine } from '../../inference/engine';
 import { ArgumentNormalizer } from './normalizer';
+import { SandboxLinkMessage, ResultMessage } from '../types/protocol';
 
 export interface V1ExecutorOptions {
   providers: LanguageProvider[];
@@ -18,6 +20,7 @@ export interface V1ExecutorOptions {
 export class SandboxExecutorV1 extends EventEmitter {
   private providers = new Map<string, LanguageProvider>();
   private drivers = new Map<string, SandboxDriver>();
+  private activeSessions = new Map<string, SandboxSession>();
   private inferenceEngine = new SignatureInferenceEngine();
   private defaultDriverId: string;
 
@@ -26,6 +29,88 @@ export class SandboxExecutorV1 extends EventEmitter {
     options.providers.forEach(p => this.providers.set(p.id, p));
     options.drivers.forEach(d => this.drivers.set(d.id, d));
     this.defaultDriverId = options.defaultDriver || options.drivers[0]?.id;
+  }
+
+  /**
+   * 打开一个持久化会话
+   */
+  async openSession(
+    languageId: string,
+    initialRequest: ExecutionRequest,
+    driverId?: string
+  ): Promise<string> {
+    const provider = this.providers.get(languageId);
+    const driver = this.drivers.get(driverId || this.defaultDriverId);
+
+    if (!provider || !driver) {
+      throw new Error(`Provider or Driver not found`);
+    }
+
+    if (!driver.capabilities.persistent || !driver.createSession) {
+      throw new Error(`Driver ${driver.id} does not support persistent sessions`);
+    }
+
+    // 1. 生成初始 Bundle (用于启动环境和加载用户代码)
+    const bundle = await provider.generate(initialRequest, driver.capabilities, { args: [], kwargs: {} });
+
+    // 2. 创建会话
+    const session = await driver.createSession(bundle);
+    const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    
+    this.activeSessions.set(sessionId, session);
+    return sessionId;
+  }
+
+  /**
+   * 在现有会话中执行代码
+   */
+  async executeInSession<T = any>(
+    sessionId: string,
+    languageId: string,
+    method: string,
+    args: any[] = [],
+    kwargs: Record<string, any> = {}
+  ): Promise<T> {
+    const session = this.activeSessions.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+
+    const provider = this.providers.get(languageId);
+    if (!provider) throw new Error(`Provider not found: ${languageId}`);
+
+    return new Promise((resolve, reject) => {
+      const callId = `call-${Date.now()}`;
+      
+      const handler = (msg: SandboxLinkMessage) => {
+        if (msg.type === 'result' && msg.id === callId) {
+          if (msg.status === 'ok') {
+            resolve(msg.data.result);
+          } else {
+            reject(new Error(msg.data.error?.message || 'Execution failed'));
+          }
+        }
+      };
+
+      session.onMessage(handler);
+
+      session.send({
+        ver: '1.0',
+        id: callId,
+        type: 'call',
+        method: method,
+        params: { args, kwargs }
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * 关闭会话
+   */
+  async closeSession(sessionId: string): Promise<void> {
+    const session = this.activeSessions.get(sessionId);
+    if (session) {
+      await session.destroy();
+      this.activeSessions.delete(sessionId);
+    }
   }
 
   async execute<T = any>(
@@ -54,6 +139,7 @@ export class SandboxExecutorV1 extends EventEmitter {
     // 使用 signature 中确定的 code 和 functionName 覆盖原始请求
     const effectiveRequest: ExecutionRequest = {
       ...request,
+      language: languageId as any,
       code: signature.code,
       functionName: signature.functionName,
     };

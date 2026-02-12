@@ -11,9 +11,9 @@ import { FSBuilder } from '../../../fs/fs-builder';
 import { InferredSignature } from '../../../inference/engine';
 import { TemplateManager } from '../../core/template-manager';
 
-export class PythonProvider implements LanguageProvider {
-  id = 'python';
-  fileExtension = '.py';
+export class PHPCgiProvider implements LanguageProvider {
+  id = 'php-cgi';
+  fileExtension = '.php';
   private templateManager: TemplateManager;
 
   constructor(templateManager?: TemplateManager) {
@@ -26,68 +26,53 @@ export class PythonProvider implements LanguageProvider {
     normalized: NormalizedArguments,
     signature?: InferredSignature
   ): Promise<ExecutionBundle> {
-    const { code, functionName, options } = request;
-    const { args, kwargs } = normalized; // 直接使用 Core 归一化后的数据
+    const { code: userCode, functionName, options } = request;
+    const { args, kwargs } = normalized;
     const workdir = options?.workdir || '/workspace';
 
-    const envs: Record<string, string> = {
-      'SB_REPORT_IO': '1',
-    };
-
-    if (caps.transports.fd) {
-      envs['SB_RESULT_FD'] = '3';
+    let code = userCode.trim();
+    if (!code.startsWith('<?php')) {
+      code = '<?php\n' + code;
     }
 
-    // 模板注入实现优雅降级
-    let wrapper = await this.templateManager.getTemplate('python', 'universal_wrapper', '.py');
-    wrapper = wrapper
-      .replace('{{SB_REPORT_IO}}', envs['SB_REPORT_IO'] || '0')
-      .replace('{{SB_RESULT_FD}}', envs['SB_RESULT_FD'] || '')
-      .replace('{{SB_IPC}}', '');
-
-    const builder = new FSBuilder({ workdir });
-    builder.addFiles({
-      'user_code.py': code,
-      'main.py': wrapper
-    });
-
-    // 构建 Sandbox-Link 请求
     const callMessage = {
       ver: '1.0',
       id: `call-${Date.now()}`,
       type: 'call',
       method: functionName,
       params: { args, kwargs },
-      config: {
-        report_io: true,
-        reset: options?.reset || 'none'
-      }
     };
 
     const callJson = JSON.stringify(callMessage);
     const jsonBytes = new TextEncoder().encode(callJson);
     const lenHex = jsonBytes.length.toString(16).padStart(8, '0');
     const sipStdin = `A${lenHex}${callJson}`;
+    
+    // PHP-CGI WASM 兼容性处理：将 STDIN 数据注入到模板中
+    const encodedStdin = Buffer.from(sipStdin, 'utf8').toString('base64');
+
+    let wrapper = await this.templateManager.getTemplate('php-cgi', 'universal_wrapper', '.php');
+    wrapper = wrapper.replace('{{STDIN_DATA}}', encodedStdin);
+
+    const builder = new FSBuilder({ workdir });
+    builder.addFiles({
+      'user_code.php': code,
+      'main.php': wrapper
+    });
 
     return {
-      entryPoint: `${workdir}/main.py`,
+      entryPoint: `${workdir}/main.php`,
       files: builder.build(),
-      envs,
-      stdin: sipStdin
     };
   }
 
   parseResult<T>(output: RawOutput): ExecutionResult<T> {
-    const { stdout, stderr, exitCode, resultData } = output;
+    const { stdout, stderr, exitCode } = output;
     const startMarker = "__SANDBOX_RESULT_START__";
     const endMarker = "__SANDBOX_RESULT_END__";
 
-    const jsonMsgs: string[] = [];
-    if (resultData) {
-      jsonMsgs.push(...resultData.split('\n').filter(line => line.trim()));
-    }
-
     let searchIdx = 0;
+    const jsonMsgs: string[] = [];
     while (true) {
       const startIdx = stdout.indexOf(startMarker, searchIdx);
       if (startIdx === -1) break;
@@ -119,8 +104,7 @@ export class PythonProvider implements LanguageProvider {
         if (parsed.type === 'result') {
           finalResult = parsed;
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
     if (!finalResult) {
@@ -137,8 +121,8 @@ export class PythonProvider implements LanguageProvider {
     return {
       status: finalResult.status === 'ok' ? 'success' : 'error',
       success: finalResult.status === 'ok',
-      result: finalResult.data.result,
-      error: finalResult.data.error,
+      result: finalResult.data?.result,
+      error: finalResult.data?.error,
       stdout,
       stderr,
       exitCode
