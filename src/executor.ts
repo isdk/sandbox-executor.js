@@ -142,10 +142,28 @@ export class SandboxExecutor extends EventEmitter {
       // 7. 执行代码
       const entryPath = `${workdir}/main${generator.fileExtension}`;
       const runtime = getRuntime(request.language);
-      const runResult = await runFS(runtime as any, entryPath, fs, {
+
+      let runResult: RunResult;
+      const timeoutMs = normalizedRequest.timeout ? normalizedRequest.timeout * 1000 : undefined;
+      const runPromise = runFS(runtime as any, entryPath, fs, {
         stdin: stdin as any,
-        timeout: normalizedRequest.timeout ? normalizedRequest.timeout * 1000 : undefined,
-      }) as RunResult;
+      }) as Promise<RunResult>;
+
+      if (timeoutMs) {
+        let timeoutId: any;
+        try {
+          const timeoutPromise = new Promise<RunResult>((resolve) => {
+            timeoutId = setTimeout(() => {
+              resolve({ resultType: 'timeout' });
+            }, timeoutMs);
+          });
+          runResult = await Promise.race([runPromise, timeoutPromise]);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } else {
+        runResult = await runPromise;
+      }
 
       // 8. 检查执行结果类型
       if (runResult.resultType !== 'complete') {

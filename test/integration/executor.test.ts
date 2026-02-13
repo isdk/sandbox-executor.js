@@ -78,7 +78,7 @@ describe('SandboxExecutor', () => {
       expect(stdin).toContain('"kwargs":{"name":"World","greeting":"Hi"}');
     });
 
-    it('应该传递自定义超时时间', async () => {
+    it('不应该将超时时间传递给 runFS', async () => {
       mockRunFS.mockResolvedValue(
         mockCompleteResult(createSuccessOutput('ok'))
       );
@@ -94,8 +94,58 @@ describe('SandboxExecutor', () => {
         expect.any(String),
         expect.any(String),
         expect.any(Object),
-        expect.objectContaining({ timeout: 5000 })
+        expect.not.objectContaining({ timeout: 5000 })
       );
+    });
+
+    it('应该在执行完成后手动返回 timeout 结果', async () => {
+      // 模拟 runFS 永远不返回
+      mockRunFS.mockReturnValue(new Promise(() => {}));
+
+      const result = await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        timeout: 0.01, // 10ms
+      });
+
+      expect(result.status).toBe('timeout');
+      expect(result.exitCode).toBe(124);
+    });
+
+    it('应该在快速返回后清理定时器', async () => {
+      vi.useFakeTimers();
+      const spyClearTimeout = vi.spyOn(global, 'clearTimeout');
+
+      mockRunFS.mockResolvedValue(mockCompleteResult(createSuccessOutput('ok')));
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        timeout: 100, // 100s
+      });
+
+      expect(spyClearTimeout).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('应该在执行出错后清理定时器', async () => {
+      vi.useFakeTimers();
+      const spyClearTimeout = vi.spyOn(global, 'clearTimeout');
+
+      // 模拟内部抛出异常
+      mockRunFS.mockRejectedValue(new Error('Unexpected error'));
+
+      await executor.execute({
+        language: 'python',
+        code: 'def func(): pass',
+        functionName: 'func',
+        timeout: 100,
+      });
+
+      expect(spyClearTimeout).toHaveBeenCalled();
+      vi.useRealTimers();
     });
   });
 

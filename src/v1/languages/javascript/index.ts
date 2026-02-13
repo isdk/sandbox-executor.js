@@ -118,7 +118,7 @@ export class JavaScriptProvider implements LanguageProvider {
     }
 
     return {
-      status: finalResult.status === 'ok' ? 'success' : 'error',
+      status: finalResult.status === 'ok' ? 'success' : (finalResult.status === 'timeout' ? 'timeout' : 'error'),
       success: finalResult.status === 'ok',
       result: finalResult.data?.result,
       error: finalResult.data?.error,

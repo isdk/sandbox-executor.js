@@ -39,6 +39,7 @@
   "dependencies": {
     "@runno/sandbox": "^0.10.2",
     "@runno/wasi": "^0.10.0",
+    "events-ex": "^2.1.1",
     "lodash-es": "^4.17.22",
     "minimatch": "^10.1.2"
   },

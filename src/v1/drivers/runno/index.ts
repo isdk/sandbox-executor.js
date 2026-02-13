@@ -24,31 +24,50 @@ export class RunnoDriver implements SandboxDriver {
   };
 
   async run(bundle: ExecutionBundle): Promise<RawOutput> {
-    const { entryPoint, files, stdin } = bundle;
+    const { entryPoint, files, stdin, timeout } = bundle;
 
     // 映射运行时名称
     const runtime = this.mapRuntime(entryPoint);
 
     // 调用底层 Runno 引擎
     try {
-      const runResult = await runFS(runtime, entryPoint, files as any, {
+      let runResult: any;
+      const timeoutMs = timeout ? timeout * 1000 : undefined;
+      const runPromise = runFS(runtime as any, entryPoint, files as any, {
         stdin: stdin as any,
-      }) as any;
+      }) as Promise<any>;
+
+      if (timeoutMs) {
+        let timeoutId: any;
+        try {
+          const timeoutPromise = new Promise<any>((resolve) => {
+            timeoutId = setTimeout(() => {
+              resolve({ resultType: 'timeout' });
+            }, timeoutMs);
+          });
+          runResult = await Promise.race([runPromise, timeoutPromise]);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } else {
+        runResult = await runPromise;
+      }
 
       let stdout = runResult.stdout || '';
       const stderr = runResult.stderr || runResult.message || '';
 
       // 如果没有协议标记且运行失败，注入伪造的协议消息
       if (runResult.resultType !== 'complete' && !stdout.includes('__SANDBOX_RESULT_START__')) {
+        const status = runResult.resultType === 'timeout' ? 'timeout' : 'fail';
         const errorResponse = {
           ver: '1.0',
           id: 'driver-error',
           type: 'result',
-          status: 'fail',
+          status: status,
           data: {
             error: {
               message: stderr || `Execution failed: ${runResult.resultType}`,
-              type: 'RuntimeError'
+              type: runResult.resultType === 'timeout' ? 'TimeoutError' : 'RuntimeError'
             }
           }
         };
@@ -58,7 +77,7 @@ export class RunnoDriver implements SandboxDriver {
       return {
         stdout,
         stderr,
-        exitCode: runResult.exitCode ?? (runResult.resultType === 'complete' ? 0 : -1),
+        exitCode: runResult.exitCode ?? (runResult.resultType === 'complete' ? 0 : (runResult.resultType === 'timeout' ? 124 : -1)),
         fs: runResult.fs
       };
     } catch (e: any) {

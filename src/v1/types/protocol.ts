@@ -40,7 +40,7 @@ export interface CallMessage extends SandboxLinkHeader {
  */
 export interface ResultMessage extends SandboxLinkHeader {
   type: 'result';
-  status: 'ok' | 'fail';
+  status: 'ok' | 'fail' | 'timeout';
   data: {
     result?: any;
     error?: {

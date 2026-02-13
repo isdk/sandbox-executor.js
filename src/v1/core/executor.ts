@@ -144,6 +144,7 @@ export class SandboxExecutorV1 extends EventEmitter {
       functionName: signature.functionName,
     };
     const bundle = await provider.generate(effectiveRequest, driver.capabilities, normalized, signature);
+    bundle.timeout = request.timeout ?? request.options?.timeout;
 
     // 4. 增强文件系统
     if (request.options?.files) {

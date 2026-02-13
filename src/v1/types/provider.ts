@@ -26,6 +26,7 @@ export interface ExecutionBundle {
   files: WASIFS;
   envs?: Record<string, string>;
   stdin?: string | Uint8Array;
+  timeout?: number; // Timeout in seconds
 }
 
 /**
